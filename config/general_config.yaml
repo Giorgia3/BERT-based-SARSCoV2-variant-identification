@@ -1,0 +1,44 @@
+USE_GPU: true
+DO_TRAINING: false
+DO_TEST: true
+DO_FINETUNING: true
+TASK_TYPE: 'clustering'  # options:{'simple_test', 'distance_cones_analysis', 'attention_analysis', 'clustering', 'one_vs_all_classification', 'eigenvalues_analysis', 'von_neumann_entropy_attentions', 'distance_cones_analysis', 'shannon_entropy_attentions'}
+SPIKE_REGION_ANALYSIS: true
+
+CLASS_LABELS:
+  gh: 0
+  lambda: 1
+  mu: 2
+  alpha: 3
+  beta: 4
+  delta: 5
+  gamma: 6
+  omicron: 7
+
+REDUCE_N_INPUT_SAMPLES: true
+MAX_N_SAMPLES_PER_CLASS: 40000
+
+K: 12
+STRIDE: 9
+ADD_KMER_TOKENS_TO_VOCAB: true
+MIN_N_OCCUR_KMER: null
+
+ALIGNMENT: true
+
+SPLIT_DATA_IN_CHUNKS: false
+CHUNK_LEN: 150
+CHUNK_STRIDE: 150
+
+MAX_LENGTH: 512
+
+N_LAYERS: 12
+N_HEADS: 12
+TRAIN_BATCH_SIZE: 4
+EVAL_BATCH_SIZE: 4
+EPOCHS: 2
+LR: 2e-5
+
+# attention threshold
+THETA: 0.3
+
+SELECTED_CLASS: "omicron"

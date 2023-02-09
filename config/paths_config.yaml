@@ -1,0 +1,7 @@
+main_dir: '.'
+
+# BWA program folder
+bwa_bin_dir: "/home/giorgia/miniconda3/bin" #"/root/anaconda3/bin"
+
+# Input data:
+datasets_dir: './datasets' #"/content/drive/MyDrive/tesi/datasets"

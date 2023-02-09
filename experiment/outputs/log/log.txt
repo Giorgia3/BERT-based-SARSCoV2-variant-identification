@@ -1,0 +1,72 @@
+Sequences info:
+===============
+Variant name: alpha | Label: 3 | File: datasets/original/alpha.fasta
+	N. sequences: 1300
+	N. duplicated sequences: 0
+	Tot. n. chunks: 258696
+	Min. len: 194
+	Max. len: 200
+	Avg. len: 198.99692307692308
+
+Variant name: beta | Label: 4 | File: datasets/original/beta.fasta
+	N. sequences: 1803
+	N. duplicated sequences: 0
+	Tot. n. chunks: 358895
+	Min. len: 195
+	Max. len: 200
+	Avg. len: 199.05435385468664
+
+Variant name: delta | Label: 5 | File: datasets/original/delta.fasta
+	N. sequences: 2251
+	N. duplicated sequences: 0
+	Tot. n. chunks: 448019
+	Min. len: 194
+	Max. len: 200
+	Avg. len: 199.0310972900933
+
+Variant name: gamma | Label: 6 | File: datasets/original/gamma.fasta
+	N. sequences: 1526
+	N. duplicated sequences: 0
+	Tot. n. chunks: 303863
+	Min. len: 195
+	Max. len: 200
+	Avg. len: 199.12385321100916
+
+Variant name: gh | Label: 0 | File: datasets/original/gh.fasta
+	N. sequences: 24
+	N. duplicated sequences: 0
+	Tot. n. chunks: 4772
+	Min. len: 198
+	Max. len: 200
+	Avg. len: 198.83333333333334
+
+Variant name: lambda | Label: 1 | File: datasets/original/lambda.fasta
+	N. sequences: 143
+	N. duplicated sequences: 0
+	Tot. n. chunks: 28478
+	Min. len: 196
+	Max. len: 200
+	Avg. len: 199.14685314685315
+
+Variant name: mu | Label: 2 | File: datasets/original/mu.fasta
+	N. sequences: 506
+	N. duplicated sequences: 0
+	Tot. n. chunks: 100658
+	Min. len: 195
+	Max. len: 200
+	Avg. len: 198.92885375494072
+
+Variant name: omicron | Label: 7 | File: datasets/original/omicron.fasta
+	N. sequences: 2328
+	N. duplicated sequences: 0
+	Tot. n. chunks: 461842
+	Min. len: 194
+	Max. len: 200
+	Avg. len: 198.38573883161513
+
+Tot info:
+	N. seqences: 9881
+	Min len: 194
+	Max len: 200
+	Avg len: 198.88908005262624
+--------------------------------------------------------------

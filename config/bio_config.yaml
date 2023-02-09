@@ -1,0 +1,18 @@
+spike_gene_start: 21563
+spike_gene_end: 25384
+
+domain_coordinates_1based:
+    SP : [1, 13]
+    S1 : [14, 685]
+    S2 : [686, 1273]
+    NTD : [14, 305]
+    no domain 1: [306, 318]
+    RBD : [319, 541]
+    no domain 2: [542, 787]
+    FP : [788, 806]
+    no domain 3: [807, 911]
+    HR1 : [912, 984]
+    no domain 4: [985, 1162]
+    HR2 : [1163, 1213]
+    TM : [1213, 1237]
+    CT : [1237, 1273]
