@@ -1,27 +1,22 @@
 import os
 from pathlib import Path
-
-from src.utils import paths_config, general_config
-from src.utils.bio_config import domain_coordinates_1based
 from src.utils.general_utils import get_inverted_class_labels_dict
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-# %matplotlib inline
-# from mpl_toolkits.axes_grid1.colorbar import colorbar
 import seaborn as sns
 
 
-def convert_domain_coords_in_token_indices(domain):
-    domain_coords_0based = np.asarray(domain_coordinates_1based[domain]) - 1
+def convert_domain_coords_in_token_indices(config, domain):
+    domain_coords_0based = np.asarray(config.bio_config.domain_coordinates_1based[domain]) - 1
     domain_start_base_idx = domain_coords_0based[0] * 3
     domain_end_base_idx = domain_coords_0based[1] * 3 - 1
 
     domain_start_token_idx = None
     domain_end_token_idx = None
 
-    bins = [[i * general_config.STRIDE - general_config.STRIDE, i * general_config.STRIDE - general_config.STRIDE + general_config.K - 1] for i in range(
-        general_config.MAX_LENGTH)]
+    bins = [[i * config.general_config.STRIDE - config.general_config.STRIDE, i * config.general_config.STRIDE - config.general_config.STRIDE + config.general_config.K - 1] for i in range(
+        config.general_config.MAX_LENGTH)]
     bins[0][1] = -1 # cls
 
     for i,bin in enumerate(bins):
@@ -132,7 +127,7 @@ def plt_attentions(mat, tick_labels, dir_path, filename="attention_matrix", thet
     fig.savefig(fig_path, bbox_inches='tight', pad_inches=0)
 
 
-def attention_analysis(attentions, log_fp_test, theta=0, selected_classes=None, selected_layers=None,
+def attention_analysis(config, attentions, log_fp_test, theta=0, selected_classes=None, selected_layers=None,
                        selected_heads=None):
     # token_base_positions_axis = attentions['token_base_positions_axis']
     # attentions_last_layer = attentions['attentions_last_layer']
@@ -141,9 +136,9 @@ def attention_analysis(attentions, log_fp_test, theta=0, selected_classes=None, 
     attentions_all_layers_thresh = attentions['attentions_all_layers_thresh']
     repr_token_base_positions_axis = attentions['repr_token_base_positions_axis']
 
-    attn_last_layers_sum_dir = Path(paths_config.attention_matrices_dir) / "attention_maps"
+    attn_last_layers_sum_dir = Path(config.paths_config.attention_matrices_dir) / "attention_maps"
 
-    inv_class_labels_dict = get_inverted_class_labels_dict()
+    inv_class_labels_dict = get_inverted_class_labels_dict(config)
 
     for target_label in selected_classes:
         # percentile = None

@@ -11,7 +11,6 @@ import math
 from matplotlib import pyplot as plt
 from torch import nn
 
-from src.utils import paths_config, general_config
 from src.analysis.attention import get_attentions
 
 
@@ -32,8 +31,8 @@ def flat_accuracy(preds, labels):
     return np.sum(pred_flat == labels_flat) / len(labels_flat)
 
 
-def loss_fn(outputs, targets):
-    if len(general_config.CLASS_LABELS.keys()) > 2:
+def loss_fn(config, outputs, targets):
+    if len(config.general_config.CLASS_LABELS.keys()) > 2:
         criterion = torch.nn.CrossEntropyLoss()
         return criterion(outputs.logits, targets.to(torch.long))
     else:
@@ -112,7 +111,7 @@ def distance_cone(mat):
     return norm_summed_rows_mat
 
 
-def process_output_for_clustering(label_ids, logits, total_test_accuracy, seq_ids, positions, y_onehot, outputs, test_accuracies, final_data_test, count_class_samples):
+def process_output_for_clustering(config, label_ids, logits, total_test_accuracy, seq_ids, positions, y_onehot, outputs, test_accuracies, final_data_test, count_class_samples):
     batch_accuracy = flat_accuracy(logits, label_ids)
     total_test_accuracy += batch_accuracy
     test_accuracies.append(batch_accuracy)
@@ -122,7 +121,7 @@ def process_output_for_clustering(label_ids, logits, total_test_accuracy, seq_id
     final_data_test['targets'].extend(y_onehot.cpu().detach().numpy().tolist())
     final_data_test['logits'].extend(outputs.logits.cpu().detach().numpy().tolist())
     # final_data_test['outputs'].extend(torch.softmax(outputs.logits).cpu().detach().numpy().tolist())
-    if len(general_config.CLASS_LABELS.keys()) > 2:
+    if len(config.general_config.CLASS_LABELS.keys()) > 2:
         final_data_test['outputs'].extend(
             torch.softmax(outputs.logits, dim=1).cpu().detach().numpy().tolist())
     else:
@@ -138,7 +137,7 @@ def process_output_for_clustering(label_ids, logits, total_test_accuracy, seq_id
             # output_embeddings = outputs.hidden_states[-1][sample_idx].cpu().detach().numpy()
             # final_data_test['input_embeddings'].append(input_embeddings)
             # final_data_test['output_embeddings'].append(output_embeddings)
-            if len(general_config.CLASS_LABELS.keys()) > 2:
+            if len(config.general_config.CLASS_LABELS.keys()) > 2:
                 final_data_test['outputs'].append(
                     torch.softmax(outputs.logits[sample_idx], dim=0).cpu().detach().numpy().tolist())
             else:
@@ -153,31 +152,31 @@ def process_output_for_clustering(label_ids, logits, total_test_accuracy, seq_id
                                                   dim=0).cpu().detach().numpy().tolist()
             }
             for k, v in CLS_embs_dict.items():
-                with open(Path(paths_config.CLS_embeddings_dir) / f"{k}.csv", 'a') as fp:
+                with open(Path(config.paths_config.CLS_embeddings_dir) / f"{k}.csv", 'a') as fp:
                     writer = csv.writer(fp)
                     writer.writerow(v)
 
             for l in sel_layers:
-                with open(Path(paths_config.CLS_embeddings_dir) / f"CLS_Y_output_L{l}.csv", 'a') as fp:
+                with open(Path(config.paths_config.CLS_embeddings_dir) / f"CLS_Y_output_L{l}.csv", 'a') as fp:
                     CLS_l_embeddings = outputs.hidden_states[l][sample_idx][0].cpu().detach().numpy()
                     writer = csv.writer(fp)
                     writer.writerow(CLS_l_embeddings)
 
 
-def print_layer_output(seq_ids, label_ids, logits, outputs):
+def print_layer_output(config, seq_ids, label_ids, logits, outputs):
     for sample_idx in range(0, len(seq_ids)):
         target_label = label_ids[sample_idx]
 
-        if target_label == general_config.CLASS_LABELS['omicron'] and target_label == np.argmax(
+        if target_label == config.general_config.CLASS_LABELS['omicron'] and target_label == np.argmax(
                 logits[sample_idx]):  # correct prediction
             input_embs = outputs.hidden_states[0][
                 sample_idx].cpu().detach().numpy()  # X = imput to current layer (output of previous layer)
             # NB: hidden_states of attn layers shifted by +1 because hidden_states[0] is embedding layer
-            mat_save_csv(input_embs, f'input_embeddings', paths_config.math_interpret_dir)
+            mat_save_csv(input_embs, f'input_embeddings', config.paths_config.math_interpret_dir)
             return
 
 
-def process_output_for_attention_analysis(label_ids, logits, seq_ids, outputs, count_class_samples, ids, theta, attentions_all_layers, attentions_all_layers_thresh, repr_token_base_positions_axis, tokenizer):
+def process_output_for_attention_analysis(config, label_ids, logits, seq_ids, outputs, count_class_samples, ids, theta, attentions_all_layers, attentions_all_layers_thresh, repr_token_base_positions_axis, tokenizer):
     # get attention matrices
     # NB:   outputs.attentions is a tuple containing 12 elements, i.e. attentions of the 12 layers of Bert
     #       eg. if we consider first layer from the bottom (closest to the input):
@@ -193,10 +192,10 @@ def process_output_for_attention_analysis(label_ids, logits, seq_ids, outputs, c
             # get attention scores of sample from all heads in all layers
             sample_attentions = []
             sample_attentions_thresh = []
-            for layer in range(general_config.N_LAYERS):
+            for layer in range(config.general_config.N_LAYERS):
                 layer_attentions = []
                 masked_layer_attentions = []
-                for head in range(general_config.N_HEADS):
+                for head in range(config.general_config.N_HEADS):
                     # Source: "Bertology meets Biology...": We exclude attention to the [SEP] delimiter token, as it has been shown to
                     # be a “no-op” attention token (Clark et al., 2019), as well as attention to
                     # the [CLS] token, which is not explicitly used in language modeling.
@@ -227,17 +226,17 @@ def process_output_for_attention_analysis(label_ids, logits, seq_ids, outputs, c
                     if n == 0:
                         repr_token_base_positions_axis[target_label].append('[CLS]')
                     else:
-                        start_p = int(((n * general_config.STRIDE - general_config.STRIDE) / 3) + 1)
-                        end_p = int(start_p + (general_config.K / 3) - 1)
+                        start_p = int(((n * config.general_config.STRIDE - config.general_config.STRIDE) / 3) + 1)
+                        end_p = int(start_p + (config.general_config.K / 3) - 1)
                         repr_token_base_positions_axis[target_label].append(f"{start_p}-{end_p}")
-                        # repr_token_base_positions_axis [target_label] = [f"{n*general_config.STRIDE-general_config.STRIDE}_{tokenizer.convert_ids_to_tokens(id)}" for n,id in enumerate(ids[sample_idx].cpu().detach().numpy().tolist())]
+                        # repr_token_base_positions_axis [target_label] = [f"{n*config.general_config.STRIDE-config.general_config.STRIDE}_{tokenizer.convert_ids_to_tokens(id)}" for n,id in enumerate(ids[sample_idx].cpu().detach().numpy().tolist())]
 
             if target_label not in attentions_all_layers_thresh:
                 attentions_all_layers_thresh[target_label] = torch.zeros(
                     np.asarray(sample_attentions_thresh).shape, dtype=torch.double)
 
-            for layer in range(general_config.N_LAYERS):
-                for head in range(general_config.N_HEADS):
+            for layer in range(config.general_config.N_LAYERS):
+                for head in range(config.general_config.N_HEADS):
                     attentions_all_layers[target_label][layer][head] = \
                         attentions_all_layers[target_label][layer][head] + np.asarray(
                             sample_attentions[layer][head])
@@ -261,14 +260,14 @@ def check_normality(seq_ids, label_ids, logits, outputs):
         break
 
 
-def process_output_for_distance_cones_analysis(label_ids, logits, seq_ids, outputs, model_params, distance_cones, model_config, count_layer, distance_cones_1_sample):
+def process_output_for_distance_cones_analysis(config, label_ids, logits, seq_ids, outputs, model_params, distance_cones, model_config, count_layer, distance_cones_1_sample):
     for sample_idx in range(0, len(seq_ids)):
         target_label = label_ids[sample_idx]
         name_seq = seq_ids[sample_idx]
-        if target_label == general_config.CLASS_LABELS['omicron'] and target_label == np.argmax(
+        if target_label == config.general_config.CLASS_LABELS['omicron'] and target_label == np.argmax(
                 logits[sample_idx]):  # correct prediction
 
-            for layer in set(np.asarray(general_config.SELECTED_LAYER_HEAD_LIST)[:, 0]):
+            for layer in set(np.asarray(config.general_config.SELECTED_LAYER_HEAD_LIST)[:, 0]):
                 X = outputs.hidden_states[layer][
                     sample_idx].cpu().detach().numpy()  # X = imput to current layer (output of previous layer)
                 # NB: hidden_states of attn layers shifted by +1 because hidden_states[0] is embedding layer
@@ -286,10 +285,10 @@ def process_output_for_distance_cones_analysis(label_ids, logits, seq_ids, outpu
                 W_k = model_params[
                     f"bert.encoder.layer.{layer}.attention.self.key.weight"].data.cpu().detach().numpy()
                 emb_dim = X.shape[1]
-                d_k = int(emb_dim / general_config.N_HEADS)
+                d_k = int(emb_dim / config.general_config.N_HEADS)
                 multihead_output = None
 
-                for head in np.sort([h for l, h in general_config.SELECTED_LAYER_HEAD_LIST if l == layer]):
+                for head in np.sort([h for l, h in config.general_config.SELECTED_LAYER_HEAD_LIST if l == layer]):
                     W_v_i = W_v[:, head * d_k: head * d_k + d_k]
                     W_q_i = W_q[:, head * d_k: head * d_k + d_k]
                     W_k_i = W_k[:, head * d_k: head * d_k + d_k]
@@ -355,8 +354,8 @@ def process_output_for_distance_cones_analysis(label_ids, logits, seq_ids, outpu
         break
 
 
-def layer_output_analysis(seq_ids, logits, label_ids, outputs):
-    output_layers_dir = Path(paths_config.math_interpret_dir) / "output_layer_histograms"
+def layer_output_analysis(config, seq_ids, logits, label_ids, outputs):
+    output_layers_dir = Path(config.paths_config.math_interpret_dir) / "output_layer_histograms"
     if not os.path.exists(output_layers_dir):
         os.makedirs(output_layers_dir)
         print(f"Directory '{output_layers_dir}' created")
@@ -365,11 +364,11 @@ def layer_output_analysis(seq_ids, logits, label_ids, outputs):
         target_label = label_ids[sample_idx]
         name_seq = seq_ids[sample_idx]
 
-        if target_label == general_config.CLASS_LABELS['omicron'] and target_label == np.argmax(
+        if target_label == config.general_config.CLASS_LABELS['omicron'] and target_label == np.argmax(
                 logits[sample_idx]):  # correct prediction
 
             # output layer histogram:
-            for layer in set(np.asarray(general_config.SELECTED_LAYER_HEAD_LIST)[:, 0]):
+            for layer in set(np.asarray(config.general_config.SELECTED_LAYER_HEAD_LIST)[:, 0]):
                 layer_output = outputs.hidden_states[layer + 1][sample_idx].cpu().detach().numpy()
                 layer_ouput_sum_rows = np.sum(layer_output, axis=0)
                 fig = plt.figure(figsize=(8, 8))
@@ -384,38 +383,38 @@ def layer_output_analysis(seq_ids, logits, label_ids, outputs):
         return
 
 
-def eigenvalues_analysis(seq_ids, label_ids, logits, outputs, model_params):
+def eigenvalues_analysis(config, seq_ids, label_ids, logits, outputs, model_params):
     layer_query_weight_names = [f'bert.encoder.layer.{layer}.attention.self.query.weight' for layer in
-                                range(general_config.N_LAYERS)]
+                                range(config.general_config.N_LAYERS)]
     layer_key_weight_names = [f'bert.encoder.layer.{layer}.attention.self.key.weight' for layer in
-                              range(general_config.N_LAYERS)]
+                              range(config.general_config.N_LAYERS)]
     layer_value_weight_names = [f'bert.encoder.layer.{layer}.attention.self.value.weight' for layer in
-                                range(general_config.N_LAYERS)]
+                                range(config.general_config.N_LAYERS)]
     for sample_idx in range(0, len(seq_ids)):
         target_label = label_ids[sample_idx]
 
-        if target_label == general_config.CLASS_LABELS[general_config.SELECTED_CLASS] and target_label == np.argmax(
+        if target_label == config.general_config.CLASS_LABELS[config.general_config.SELECTED_CLASS] and target_label == np.argmax(
                 logits[sample_idx]):  # correct prediction
             Qi_KiT_eigvals_file = Path(
-                paths_config.math_interpret_dir) / "von_neumann_entropy_Qi_KiT.txt"
+                config.paths_config.math_interpret_dir) / "von_neumann_entropy_Qi_KiT.txt"
             symm_comp_eigvals_file = Path(
-                paths_config.math_interpret_dir) / "von_neumann_entropy_symm_comp.txt"
+                config.paths_config.math_interpret_dir) / "von_neumann_entropy_symm_comp.txt"
 
             with open(Qi_KiT_eigvals_file, 'w') as Qi_KiT_eigvals_fp, open(symm_comp_eigvals_file,
                                                                            'w') as symm_comp_eigvals_fp:
-                # get input embedding of sample for selected heads (shape=(general_config.N_LAYERS, batch_dim, n_tokens_in_seq, emb_dim))
-                VN_entropy_Qi_KiT_layer_sum = np.zeros(general_config.N_LAYERS)
-                VN_entropy_symm_comp_layer_sum = np.zeros(general_config.N_LAYERS)
-                Sh_entropy_Qi_KiT_layer_sum = np.zeros(general_config.N_LAYERS)
-                Sh_entropy_symm_comp_layer_sum = np.zeros(general_config.N_LAYERS)
-                count_heads_layer = np.zeros(general_config.N_LAYERS)
+                # get input embedding of sample for selected heads (shape=(config.general_config.N_LAYERS, batch_dim, n_tokens_in_seq, emb_dim))
+                VN_entropy_Qi_KiT_layer_sum = np.zeros(config.general_config.N_LAYERS)
+                VN_entropy_symm_comp_layer_sum = np.zeros(config.general_config.N_LAYERS)
+                Sh_entropy_Qi_KiT_layer_sum = np.zeros(config.general_config.N_LAYERS)
+                Sh_entropy_symm_comp_layer_sum = np.zeros(config.general_config.N_LAYERS)
+                count_heads_layer = np.zeros(config.general_config.N_LAYERS)
 
-                for layer, head in general_config.SELECTED_LAYER_HEAD_LIST:
+                for layer, head in config.general_config.SELECTED_LAYER_HEAD_LIST:
 
                     X = outputs.hidden_states[layer + 1][
                         sample_idx].cpu().detach().numpy()  # token embeddings shape=(n_tokens_in_seq, emb_dim)=(512, 768)
                     emb_dim = X.shape[1]
-                    d_k = int(emb_dim / general_config.N_HEADS)
+                    d_k = int(emb_dim / config.general_config.N_HEADS)
                     W_q = model_params[layer_query_weight_names[layer]].data.cpu().detach().numpy()
                     W_k = model_params[layer_key_weight_names[layer]].data.cpu().detach().numpy()
                     W_v = model_params[layer_value_weight_names[layer]].data.cpu().detach().numpy()
@@ -445,7 +444,7 @@ def eigenvalues_analysis(seq_ids, label_ids, logits, outputs, model_params):
                     singular_values_output_head_i = abs(np.linalg.svd(output_head_i, compute_uv=False))
                     max_sv_output_head_i = max(singular_values_output_head_i)
 
-                    dit_path_head = Path(paths_config.math_interpret_dir) / 'norm_Qi_Ki_Vi' / f'{layer + 1}_{head + 1}'
+                    dit_path_head = Path(config.paths_config.math_interpret_dir) / 'norm_Qi_Ki_Vi' / f'{layer + 1}_{head + 1}'
                     if not os.path.exists(dit_path_head):
                         os.makedirs(dit_path_head)
 
@@ -553,7 +552,7 @@ def eigenvalues_analysis(seq_ids, label_ids, logits, outputs, model_params):
                 # Sh_entropy_Qi_KiT_layer_mean = Sh_entropy_Qi_KiT_layer_sum / count_heads_layer
                 # Sh_entropy_symm_comp_layer_mean = Sh_entropy_symm_comp_layer_sum / count_heads_layer
                 # fig = plt.figure(figsize=(10,10))
-                # x = [i+1 for i in range(general_config.N_LAYERS)]
+                # x = [i+1 for i in range(config.general_config.N_LAYERS)]
                 # fig, ax = plt.subplots()
                 # ax.plot(x, VN_entropy_Qi_KiT_layer_mean, 'b', label='VN entropy of QiKi^T')
                 # ax.plot(x, VN_entropy_symm_comp_layer_mean, 'r', label='VN entropy of QiKi^T symm. comp.')
@@ -571,7 +570,7 @@ def eigenvalues_analysis(seq_ids, label_ids, logits, outputs, model_params):
                 # plt.close()
 
                 # fig = plt.figure(figsize=(10,10))
-                # x = [i+1 for i in range(general_config.N_LAYERS)]
+                # x = [i+1 for i in range(config.general_config.N_LAYERS)]
                 # fig, ax = plt.subplots()
                 # ax.plot(x, Sh_entropy_Qi_KiT_layer_mean, 'b', label='Shannon entropy of QiKi^T')
                 # ax.plot(x, Sh_entropy_symm_comp_layer_mean, 'r', label='Shannon entropy of QiKi^T symm. comp.')
@@ -590,8 +589,8 @@ def eigenvalues_analysis(seq_ids, label_ids, logits, outputs, model_params):
             return
 
 
-def distance_cones_analysis(distance_cones, distance_cones_1_sample):
-    dist_cones_path = Path(paths_config.math_interpret_dir) / 'distance_cones'
+def distance_cones_analysis(config, distance_cones, distance_cones_1_sample):
+    dist_cones_path = Path(config.paths_config.math_interpret_dir) / 'distance_cones'
     if not os.path.exists(dist_cones_path):
         os.makedirs(dist_cones_path)
 

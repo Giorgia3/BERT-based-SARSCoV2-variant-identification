@@ -1,16 +1,15 @@
 import torch
 from transformers import InputExample, InputFeatures
 from torch.utils.data import Dataset
-from src.utils import general_config
 from src.classification.tokenizer import seq2kmer
 from linecache import getline
 
 
-def token_encode(seq, tokenizer):
+def token_encode(config, seq, tokenizer):
     encoded_seq = {}
 
     #   (1) Tokenize the sentence.
-    seq_tokens = seq2kmer(seq, general_config.K, general_config.STRIDE)
+    seq_tokens = seq2kmer(seq, config.general_config.K, config.general_config.STRIDE)
 
     #   (4) Map tokens to their IDs.
     seq_input_ids = []
@@ -22,8 +21,8 @@ def token_encode(seq, tokenizer):
 
     #   (5) Truncate the sentence to `MAX_LENGTH`
     #       NB: -2 because we must consider also [CLS] and [SEP] tokens
-    if len(seq_tokens) > general_config.MAX_LENGTH-2:
-        seq_input_ids = seq_input_ids[:general_config.MAX_LENGTH - 2]
+    if len(seq_tokens) > config.general_config.MAX_LENGTH-2:
+        seq_input_ids = seq_input_ids[:config.general_config.MAX_LENGTH - 2]
 
     #   (2) Prepend the `[CLS]` token to the start.
     seq_input_ids.insert(0, tokenizer.convert_tokens_to_ids('[CLS]'))
@@ -32,9 +31,9 @@ def token_encode(seq, tokenizer):
     seq_input_ids.append(tokenizer.convert_tokens_to_ids('[SEP]'))
 
     #   Pad if sentence is too short
-    if len(seq_tokens) < general_config.MAX_LENGTH:
+    if len(seq_tokens) < config.general_config.MAX_LENGTH:
         length_seq = len(seq_input_ids)
-        seq_input_ids.extend([tokenizer.convert_tokens_to_ids('[PAD]')] * (general_config.MAX_LENGTH - length_seq))
+        seq_input_ids.extend([tokenizer.convert_tokens_to_ids('[PAD]')] * (config.general_config.MAX_LENGTH - length_seq))
     # print(seq_tokens)
     # print(seq_input_ids)
 
@@ -53,11 +52,12 @@ def token_encode(seq, tokenizer):
 
 class DatasetGenerator(Dataset):
 
-    def __init__(self, input_reader, input_fp, metadata, tokenizer):
+    def __init__(self, config, input_reader, input_fp, metadata, tokenizer):
         self.input_reader = input_reader
         self.metadata = metadata
         self.input_fp = input_fp
         self.tokenizer = tokenizer
+        self.config = config
 
     def __len__(self):
         return self.metadata['len']
@@ -82,7 +82,7 @@ class DatasetGenerator(Dataset):
                                text_b=None,
                                label=label)
 
-        encoded_seq = token_encode(example.text_a, self.tokenizer)
+        encoded_seq = token_encode(self.config, example.text_a, self.tokenizer)
 
         features = InputFeatures(input_ids=encoded_seq['input_ids'],
                                  attention_mask=encoded_seq['attention_mask'],
@@ -101,11 +101,12 @@ class DatasetGenerator(Dataset):
 
 class DatasetGenerator_InputEmbeddings(Dataset):
 
-    def __init__(self, input_fp, metadata, tokenizer):
+    def __init__(self, config, input_fp, metadata, tokenizer):
         self.metadata = metadata
         self.input_fp = input_fp
-        self.selected_variant = general_config.POSITIVE_CLASS_MLP
+        self.selected_variant = config.general_config.POSITIVE_CLASS_MLP
         self.tokenizer = tokenizer
+        self.config = config
 
     def __len__(self):
         return self.metadata['len']
@@ -116,7 +117,7 @@ class DatasetGenerator_InputEmbeddings(Dataset):
         # line = next(itertools.islice(self.input_fp, idx, idx+1)).split(',')
         # print(line[:20])
         label_tmp = float(line[0])
-        if label_tmp == general_config.CLASS_LABELS[self.selected_variant]:
+        if label_tmp == self.config.general_config.CLASS_LABELS[self.selected_variant]:
             label = float(1)
         else:
             label = float(0)
@@ -130,7 +131,7 @@ class DatasetGenerator_InputEmbeddings(Dataset):
                                text_b=None,
                                label=label)
 
-        encoded_seq = token_encode(example.text_a, self.tokenizer)
+        encoded_seq = token_encode(self.config, example.text_a, self.tokenizer)
 
         features = InputFeatures(input_ids=encoded_seq['input_ids'],
                                  attention_mask=encoded_seq['attention_mask'],

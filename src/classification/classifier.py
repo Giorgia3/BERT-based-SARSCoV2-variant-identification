@@ -6,7 +6,6 @@ import torch
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from transformers import BertForSequenceClassification, get_linear_schedule_with_warmup
 import tensorflow as tf
-from src.utils import paths_config, general_config
 import gc
 import time
 
@@ -22,24 +21,24 @@ from src.utils.general_utils import get_train_val_test_sizes
 
 
 class Classifier:
-    def __init__(self):
+    def __init__(self, config):
         # self.tokenizer = Tokenizer()
         # self.tokenizer.plot_kmers_histogram()
         # self.size_token_embeddings = self.tokenizer.add_tokens_to_bert_vocabulary()
-        self.tokenizer = Tokenizer(paths_config.models_dir)
+        self.tokenizer = Tokenizer(config.paths_config.models_dir)
         self.size_token_embeddings = len(self.tokenizer)
-        self.sizes_info = get_train_val_test_sizes()
+        self.sizes_info = get_train_val_test_sizes(config)
 
         self.model = BertForSequenceClassification.from_pretrained(
             "bert-base-cased",
-            num_labels=len(general_config.CLASS_LABELS.keys()),
+            num_labels=len(config.general_config.CLASS_LABELS.keys()),
             output_attentions=True,  # Whether the model returns attentions weights.
             output_hidden_states=True,  # Whether the model returns all hidden-states.
         )
 
         self.device = None
-        if general_config.USE_GPU and (
-                general_config.DO_TRAINING or general_config.DO_TEST or general_config.TASK_TYPE == 'one_vs_all_classification'):
+        if config.general_config.USE_GPU and (
+                config.general_config.DO_TRAINING or config.general_config.DO_TEST or config.general_config.TASK_TYPE == 'one_vs_all_classification'):
             # Get the GPU device name.
             device_name = tf.test.gpu_device_name()
 
@@ -74,18 +73,18 @@ class Classifier:
 
 
 class Trainer(Classifier):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, config):
+        super().__init__(config)
 
-    def __setup_training(self, train_data_size, log_fp):
+    def __setup_training(self, config, train_data_size, log_fp):
         # Set up epochs and steps
-        steps_per_epoch = int(train_data_size / general_config.TRAIN_BATCH_SIZE)
-        num_train_steps = steps_per_epoch * general_config.EPOCHS
-        warmup_steps = int(general_config.EPOCHS * train_data_size * 0.1 / general_config.TRAIN_BATCH_SIZE)
+        steps_per_epoch = int(train_data_size / config.general_config.TRAIN_BATCH_SIZE)
+        num_train_steps = steps_per_epoch * config.general_config.EPOCHS
+        warmup_steps = int(config.general_config.EPOCHS * train_data_size * 0.1 / config.general_config.TRAIN_BATCH_SIZE)
 
         # creates an optimizer and learning rate scheduler
         optimizer = torch.optim.AdamW(self.model.parameters(),
-                                      lr=general_config.LR,
+                                      lr=config.general_config.LR,
                                       # args.learning_rate - default is 5e-5, our notebook had 2e-5
                                       eps=1e-8  # args.adam_epsilon  - default is 1e-8.
                                       )
@@ -111,7 +110,7 @@ class Trainer(Classifier):
 
         return optimizer, scheduler
 
-    def __train(self, train_dataloader, optimizer, scheduler, log_fp):
+    def __train(self, config, train_dataloader, optimizer, scheduler, log_fp):
         # Perform one full pass over the training set.
 
         # Measure how long the training epoch takes.
@@ -136,7 +135,7 @@ class Trainer(Classifier):
             mask = batch['mask'].to(self.device, dtype=torch.long)
             targets = batch['targets'].to(self.device, dtype=torch.float)
             seq_ids = batch['seq_ids'].to(self.device, dtype=torch.int)
-            y_onehot = torch.nn.functional.one_hot(targets.long(), num_classes=len(general_config.CLASS_LABELS.keys()))
+            y_onehot = torch.nn.functional.one_hot(targets.long(), num_classes=len(config.general_config.CLASS_LABELS.keys()))
             y_onehot = y_onehot.float()
 
             # Always clear any previously calculated gradients before performing a
@@ -160,7 +159,7 @@ class Trainer(Classifier):
                                  labels=y_onehot,
                                  return_dict=True)
 
-            loss = loss_fn(outputs, targets)
+            loss = loss_fn(config, outputs, targets)
 
             # Save hidden states of last layer for clustering
             # hidden_states = Tuple of torch.FloatTensor (one for the output of the embeddings
@@ -215,7 +214,7 @@ class Trainer(Classifier):
 
         return avg_train_loss, training_time, train_steps_loss
 
-    def __validate(self, val_dataloader, log_fp):
+    def __validate(self, config, val_dataloader, log_fp):
         # After the completion of each training epoch, measure our performance on
         # our validation set.
 
@@ -256,7 +255,7 @@ class Trainer(Classifier):
                 # token_type_ids is the same as the "segment ids", which
                 # differentiates sentence 1 and 2 in 2-sentence tasks.
                 y_onehot = torch.nn.functional.one_hot(targets.long(), num_classes=len(
-                    general_config.CLASS_LABELS.keys()))
+                    config.general_config.CLASS_LABELS.keys()))
                 y_onehot = y_onehot.float()
                 outputs = self.model(ids,
                                      attention_mask=mask,
@@ -266,7 +265,7 @@ class Trainer(Classifier):
             # Get the loss and "logits" output by the model. The "logits" are the
             # output values prior to applying an activation function like the
             # softmax.
-            loss = loss_fn(outputs, targets)
+            loss = loss_fn(config, outputs, targets)
             logits = outputs.logits
 
             # Accumulate the validation loss.
@@ -281,7 +280,7 @@ class Trainer(Classifier):
             total_eval_accuracy += flat_accuracy(logits, label_ids)
 
             final_data['targets'].extend(y_onehot.cpu().detach().numpy().tolist())
-            if len(general_config.CLASS_LABELS.keys()) > 2:
+            if len(config.general_config.CLASS_LABELS.keys()) > 2:
                 final_data['outputs'].extend(torch.softmax(outputs.logits, dim=1).cpu().detach().numpy().tolist())
             else:
                 final_data['outputs'].extend(torch.sigmoid(outputs.logits).cpu().detach().numpy().tolist())
@@ -313,10 +312,10 @@ class Trainer(Classifier):
 
         return final_data, avg_val_loss, avg_val_accuracy, validation_time
 
-    def __train_epochs(self, train_dataloader, val_dataloader, train_data_size, log_fp):
+    def __train_epochs(self, config, train_dataloader, val_dataloader, train_data_size, log_fp):
         gc.collect()
         torch.cuda.empty_cache()
-        optimizer, scheduler = self.__setup_training(train_data_size, log_fp)
+        optimizer, scheduler = self.__setup_training(config, train_data_size, log_fp)
 
         training_stats = []
         train_steps_loss = []
@@ -324,20 +323,20 @@ class Trainer(Classifier):
         log_fp.write("\nTraining and validation:\n")
         log_fp.write("==========================\n")
 
-        for epoch in range(general_config.EPOCHS):
+        for epoch in range(config.general_config.EPOCHS):
             print("")
-            print('======== Epoch {:} / {:} ========'.format(epoch + 1, general_config.EPOCHS))
+            print('======== Epoch {:} / {:} ========'.format(epoch + 1, config.general_config.EPOCHS))
             print('Training...')
-            log_fp.write('\n======== Epoch {:} / {:} ========\n'.format(epoch + 1, general_config.EPOCHS))
+            log_fp.write('\n======== Epoch {:} / {:} ========\n'.format(epoch + 1, config.general_config.EPOCHS))
             log_fp.write("\nTraining:\n")
-            avg_train_loss, training_time, train_steps_loss_epoch = self.__train(train_dataloader, optimizer, scheduler,
+            avg_train_loss, training_time, train_steps_loss_epoch = self.__train(config, train_dataloader, optimizer, scheduler,
                                                                                  log_fp)
             train_steps_loss.extend(train_steps_loss_epoch)
 
             print("")
             print("Validation...")
             log_fp.write("\nValidation:\n")
-            final_data, avg_val_loss, avg_val_accuracy, validation_time = self.__validate(val_dataloader, log_fp)
+            final_data, avg_val_loss, avg_val_accuracy, validation_time = self.__validate(config, val_dataloader, log_fp)
 
             training_stats_epoch = {
                 'epoch': epoch + 1,
@@ -359,61 +358,61 @@ class Trainer(Classifier):
         # return train hidden_states from last epoch
         return training_stats, train_steps_loss
 
-    def finetune(self):
-        with open(paths_config.train_file) as train_fp, open(paths_config.val_file) as val_fp, open(paths_config.log_file, 'a') as log_fp:
+    def finetune(self, config):
+        with open(config.paths_config.train_file) as train_fp, open(config.paths_config.val_file) as val_fp, open(config.paths_config.log_file, 'a') as log_fp:
             train_reader = csv.reader(train_fp, delimiter=',')
             train_metadata = {'len': self.sizes_info['train_data_size_seqs']}
-            X_train_generator = DatasetGenerator(train_reader, train_fp, train_metadata, self.tokenizer.tokenizer)
+            X_train_generator = DatasetGenerator(config, train_reader, train_fp, train_metadata, self.tokenizer.tokenizer)
             train_dataloader = DataLoader(
                 X_train_generator,  # The training samples.
                 sampler=RandomSampler(X_train_generator),  # Select batches randomly
-                batch_size=general_config.TRAIN_BATCH_SIZE,  # Trains with this batch size.
+                batch_size=config.general_config.TRAIN_BATCH_SIZE,  # Trains with this batch size.
                 num_workers=0
             )
 
             val_reader = csv.reader(val_fp, delimiter=',')
             val_metadata = {'len': self.sizes_info['val_data_size_seqs']}
-            X_val_generator = DatasetGenerator(val_reader, val_fp, val_metadata, self.tokenizer)  # .batch(EVAL_BATCH_SIZE)
+            X_val_generator = DatasetGenerator(config, val_reader, val_fp, val_metadata, self.tokenizer)  # .batch(EVAL_BATCH_SIZE)
 
             validation_dataloader = DataLoader(
                 X_val_generator,  # The validation samples.
                 sampler=SequentialSampler(X_val_generator),  # Pull out batches sequentially.
-                batch_size=general_config.EVAL_BATCH_SIZE,  # Evaluate with this batch size.
+                batch_size=config.general_config.EVAL_BATCH_SIZE,  # Evaluate with this batch size.
                 num_workers=0
             )
 
-            training_stats, train_steps_loss = self.__train_epochs(train_dataloader, validation_dataloader,
+            training_stats, train_steps_loss = self.__train_epochs(config, train_dataloader, validation_dataloader,
                                                                    self.sizes_info['train_data_size_seqs'],
                                                                    log_fp)
 
-            self.save_model(paths_config.model_file_finetuned)
+            self.save_model(config.paths_config.model_file_finetuned)
 
             # save last epoch validation data and statistics:
             final_data = training_stats[-1]['final_data']
-            pickle.dump(final_data, open(paths_config.final_val_outputs_file, 'wb'))
-            pickle.dump(train_steps_loss, open(paths_config.train_steps_loss_file, 'wb'))
-            pickle.dump(training_stats, open(paths_config.training_stats_file, 'wb'))
+            pickle.dump(final_data, open(config.paths_config.final_val_outputs_file, 'wb'))
+            pickle.dump(train_steps_loss, open(config.paths_config.train_steps_loss_file, 'wb'))
+            pickle.dump(training_stats, open(config.paths_config.training_stats_file, 'wb'))
 
-    def report(self):
-        if not os.path.exists(paths_config.final_val_outputs_file):
-            raise FileNotFoundError(f'Error: file not found: {paths_config.final_val_outputs_file}')
-        if not os.path.exists(paths_config.train_steps_loss_file):
-            raise FileNotFoundError(f'Error: file not found: {paths_config.train_steps_loss_file}')
-        if not os.path.exists(paths_config.training_stats_file):
-            raise FileNotFoundError(f'Error: file not found: {paths_config.training_stats_file}')
-        final_data = pickle.load(open(paths_config.final_val_outputs_file, 'rb'))
-        train_steps_loss = pickle.load(open(paths_config.train_steps_loss_file, 'rb'))
-        training_stats = pickle.load(open(paths_config.training_stats_file, 'rb'))
-        report.show_train_stats_and_plots(training_stats, train_steps_loss)
+    def report(self, config):
+        if not os.path.exists(config.paths_config.final_val_outputs_file):
+            raise FileNotFoundError(f'Error: file not found: {config.paths_config.final_val_outputs_file}')
+        if not os.path.exists(config.paths_config.train_steps_loss_file):
+            raise FileNotFoundError(f'Error: file not found: {config.paths_config.train_steps_loss_file}')
+        if not os.path.exists(config.paths_config.training_stats_file):
+            raise FileNotFoundError(f'Error: file not found: {config.paths_config.training_stats_file}')
+        final_data = pickle.load(open(config.paths_config.final_val_outputs_file, 'rb'))
+        train_steps_loss = pickle.load(open(config.paths_config.train_steps_loss_file, 'rb'))
+        training_stats = pickle.load(open(config.paths_config.training_stats_file, 'rb'))
+        report.show_train_stats_and_plots(config, training_stats, train_steps_loss)
         output_labels = np.argmax(final_data['outputs'], axis=1)
         target_labels = np.argmax(final_data['targets'], axis=1)
-        report.final_statistics(target_labels, output_labels, final_data['outputs'], paths_config.log_file,
+        report.final_statistics(config, target_labels, output_labels, final_data['outputs'], config.paths_config.log_file,
                                 'Global Validation')
 
 
 class Tester(Classifier):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, config):
+        super().__init__(config)
 
     def load_model(self, filepath):
         if self.device.type == 'cuda':
@@ -421,35 +420,36 @@ class Tester(Classifier):
         else:
             self.model.load_state_dict(torch.load(filepath, map_location=torch.device('cpu')))
 
-    def test(self):
-        if os.path.exists(paths_config.model_file_finetuned):
-            self.load_model(paths_config.model_file_finetuned)
+    def test(self, config):
+        if os.path.exists(config.paths_config.model_file_finetuned):
+            self.load_model(config.paths_config.model_file_finetuned)
         else:
-            raise FileNotFoundError(f'Error: model file not found: {paths_config.model_file_finetuned}')
+            raise FileNotFoundError(f'Error: model file not found: {config.paths_config.model_file_finetuned}')
 
-        sizes_info = get_train_val_test_sizes()
+        sizes_info = get_train_val_test_sizes(config)
         try:
             test_data_size = sizes_info['test_data_size_seqs'] # -1
         except NameError:
-            test_data_size = sum(1 for line in open(paths_config.test_file))
+            test_data_size = sum(1 for line in open(config.paths_config.test_file))
 
         print(f'\nTEST DATA SIZE: {test_data_size}\n\n\n')
 
-        with open(paths_config.test_file) as test_fp, open(paths_config.log_file, 'a') as log_fp:
+        with open(config.paths_config.test_file) as test_fp, open(config.paths_config.log_file, 'a') as log_fp:
             test_reader = csv.reader(test_fp, delimiter=',')
             test_metadata = {'len': test_data_size}
-            X_test_generator = DatasetGenerator(test_reader, test_fp, test_metadata, self.tokenizer.tokenizer)
+            X_test_generator = DatasetGenerator(config, test_reader, test_fp, test_metadata, self.tokenizer.tokenizer)
             test_dataloader = DataLoader(
                 X_test_generator,  # The validation samples.
                 sampler=SequentialSampler(X_test_generator),  # Pull out batches sequentially.
-                batch_size=general_config.EVAL_BATCH_SIZE,  # Evaluate with this batch size.
+                batch_size=config.general_config.EVAL_BATCH_SIZE,  # Evaluate with this batch size.
                 num_workers=0
             )
 
             final_data_test, test_accuracies, attentions, timings = self.__test(
+                config,
                 test_dataloader,
                 log_fp,
-                general_config.THETA
+                config.general_config.THETA
             )
 
             mean_syn = np.sum(timings) / len(timings)
@@ -458,23 +458,23 @@ class Tester(Classifier):
             log_fp.write(f"Inference time: {mean_syn} ({std_syn})\n")
 
             # save output data on file for furure computation:
-            pickle.dump(test_accuracies, open(paths_config.test_accuracies_file, 'wb'))
-            pickle.dump(final_data_test, open(paths_config.final_data_test_file, 'wb'))
+            pickle.dump(test_accuracies, open(config.paths_config.test_accuracies_file, 'wb'))
+            pickle.dump(final_data_test, open(config.paths_config.final_data_test_file, 'wb'))
 
-    def report(self):
-        if not os.path.exists(paths_config.test_accuracies_file):
-            raise FileNotFoundError(f'Error: file not found: {paths_config.test_accuracies_file}')
-        if not os.path.exists(paths_config.final_data_test_file):
-            raise FileNotFoundError(f'Error: file not found: {paths_config.final_data_test_file}')
-        test_accuracies = pickle.load(open(paths_config.test_accuracies_file, 'rb'))
-        final_data_test = pickle.load(open(paths_config.final_data_test_file, 'rb'))
-        show_test_plots(test_accuracies)
+    def report(self, config):
+        if not os.path.exists(config.paths_config.test_accuracies_file):
+            raise FileNotFoundError(f'Error: file not found: {config.paths_config.test_accuracies_file}')
+        if not os.path.exists(config.paths_config.final_data_test_file):
+            raise FileNotFoundError(f'Error: file not found: {config.paths_config.final_data_test_file}')
+        test_accuracies = pickle.load(open(config.paths_config.test_accuracies_file, 'rb'))
+        final_data_test = pickle.load(open(config.paths_config.final_data_test_file, 'rb'))
+        show_test_plots(config, test_accuracies)
         output_labels_test = np.argmax(final_data_test['outputs'], axis=1)
         target_labels_test = np.argmax(final_data_test['targets'], axis=1)
         output_logits_test = final_data_test['outputs']
-        final_statistics(target_labels_test, output_labels_test, output_logits_test, paths_config.log_file, 'Test')  # , logits=final_data_test['logits'])
+        final_statistics(config, target_labels_test, output_labels_test, config.paths_config.log_file, 'Test')  # , logits=final_data_test['logits'])
 
-    def __test(self, test_dataloader, log_fp_test, theta=0):
+    def __test(self, config, test_dataloader, log_fp_test, theta=0):
         gc.collect()
         torch.cuda.empty_cache()
 
@@ -498,10 +498,10 @@ class Tester(Classifier):
                     np.take(np.asarray(list(self.tokenizer.tokenizer.get_added_vocab().values())), rand_idx, axis=0)
                 ],
                     dtype=torch.long),
-                'mask': torch.ones(2, general_config.MAX_LENGTH, dtype=torch.long),
-                'targets': torch.randn(2, general_config.MAX_LENGTH, dtype=torch.float),
-                'seq_ids': torch.randint(2, general_config.MAX_LENGTH, (1, general_config.MAX_LENGTH)),
-                'positions': torch.randint(2, general_config.MAX_LENGTH, (1, general_config.MAX_LENGTH))
+                'mask': torch.ones(2, config.general_config.MAX_LENGTH, dtype=torch.long),
+                'targets': torch.randn(2, config.general_config.MAX_LENGTH, dtype=torch.float),
+                'seq_ids': torch.randint(2, config.general_config.MAX_LENGTH, (1, config.general_config.MAX_LENGTH)),
+                'positions': torch.randint(2, config.general_config.MAX_LENGTH, (1, config.general_config.MAX_LENGTH))
             }
             for _ in range(10):
                 _ = self.model(dummy_input['ids'].to(self.device, dtype=torch.long),
@@ -532,10 +532,10 @@ class Tester(Classifier):
 
         model_params = dict(self.model.named_parameters())
 
-        for _, label in general_config.CLASS_LABELS.items():
+        for _, label in config.general_config.CLASS_LABELS.items():
             count_class_samples[int(label)] = 0
         # attention_matrices_count = {}
-        # for _, label in general_config.CLASS_LABELS.items():
+        # for _, label in config.general_config.CLASS_LABELS.items():
         #     attention_matrices_count[int(label)] = 0
         # max_n_attention_matrices = 6
 
@@ -554,7 +554,7 @@ class Tester(Classifier):
             positions = batch['positions'].to('cpu').numpy()
 
             y_onehot = torch.nn.functional.one_hot(targets.long(), num_classes=len(
-                general_config.CLASS_LABELS.keys())).float()
+                config.general_config.CLASS_LABELS.keys())).float()
 
             # Telling the model not to compute or store gradients, saving memory and
             # speeding up prediction
@@ -565,13 +565,13 @@ class Tester(Classifier):
                 outputs = self.model(ids,
                                      attention_mask=mask,
                                      return_dict=True,
-                                     output_attentions=(general_config.TASK_TYPE == 'attention_analysis'),
-                                     output_hidden_states=(general_config.TASK_TYPE == 'eigenvalues_analysis'
-                                                           or general_config.TASK_TYPE == 'check_normality'
-                                                           or general_config.TASK_TYPE == 'distance_cones_analysis'
-                                                           or general_config.TASK_TYPE == 'layer_output_analysis'
-                                                           or general_config.TASK_TYPE == 'print_layer_output'
-                                                           or general_config.TASK_TYPE == 'clustering'))
+                                     output_attentions=(config.general_config.TASK_TYPE == 'attention_analysis'),
+                                     output_hidden_states=(config.general_config.TASK_TYPE == 'eigenvalues_analysis'
+                                                           or config.general_config.TASK_TYPE == 'check_normality'
+                                                           or config.general_config.TASK_TYPE == 'distance_cones_analysis'
+                                                           or config.general_config.TASK_TYPE == 'layer_output_analysis'
+                                                           or config.general_config.TASK_TYPE == 'print_layer_output'
+                                                           or config.general_config.TASK_TYPE == 'clustering'))
 
                 if self.device.type == 'cuda':
                     ender.record()
@@ -589,42 +589,42 @@ class Tester(Classifier):
             # predictions.append(logits)
             # true_labels.append(label_ids)
 
-            if general_config.TASK_TYPE == 'print_layer_output':
-                print_layer_output(seq_ids, label_ids, logits, outputs)
+            if config.general_config.TASK_TYPE == 'print_layer_output':
+                print_layer_output(config, seq_ids, label_ids, logits, outputs)
                 return final_data_test, test_accuracies, attentions, timings
 
-            elif general_config.TASK_TYPE == 'clustering':
-                process_output_for_clustering(label_ids, logits, total_test_accuracy, seq_ids, positions, y_onehot, outputs, test_accuracies, final_data_test, count_class_samples)
+            elif config.general_config.TASK_TYPE == 'clustering':
+                process_output_for_clustering(config, label_ids, logits, total_test_accuracy, seq_ids, positions, y_onehot, outputs, test_accuracies, final_data_test, count_class_samples)
 
-            elif general_config.TASK_TYPE == 'attention_analysis':
+            elif config.general_config.TASK_TYPE == 'attention_analysis':
 
-                process_output_for_attention_analysis(label_ids, logits, seq_ids, outputs, count_class_samples, ids, theta, attentions_all_layers, attentions_all_layers_thresh, repr_token_base_positions_axis, self.tokenizer.tokenizer)
+                process_output_for_attention_analysis(config, label_ids, logits, seq_ids, outputs, count_class_samples, ids, theta, attentions_all_layers, attentions_all_layers_thresh, repr_token_base_positions_axis, self.tokenizer.tokenizer)
 
-            elif general_config.TASK_TYPE == 'check_normality':
+            elif config.general_config.TASK_TYPE == 'check_normality':
                 check_normality(seq_ids, label_ids, logits, outputs)
 
-            elif general_config.TASK_TYPE == 'distance_cones_analysis':
-                process_output_for_distance_cones_analysis(label_ids, logits, seq_ids, outputs, model_params, distance_cones, self.model.config, count_layer, distance_cones_1_sample)
+            elif config.general_config.TASK_TYPE == 'distance_cones_analysis':
+                process_output_for_distance_cones_analysis(config, label_ids, logits, seq_ids, outputs, model_params, distance_cones, self.model.config, count_layer, distance_cones_1_sample)
                 break
 
-            elif general_config.TASK_TYPE == 'layer_output_analysis':
-                layer_output_analysis(seq_ids, logits, label_ids, outputs)
+            elif config.general_config.TASK_TYPE == 'layer_output_analysis':
+                layer_output_analysis(config, seq_ids, logits, label_ids, outputs)
                 return final_data_test, test_accuracies, attentions, timings
 
-            elif general_config.TASK_TYPE == 'eigenvalues_analysis':
-                eigenvalues_analysis(seq_ids, label_ids, logits, outputs, model_params)
+            elif config.general_config.TASK_TYPE == 'eigenvalues_analysis':
+                eigenvalues_analysis(config, seq_ids, label_ids, logits, outputs, model_params)
                 return final_data_test, test_accuracies, attentions, timings
 
-        if general_config.TASK_TYPE == 'attention_analysis':
+        if config.general_config.TASK_TYPE == 'attention_analysis':
             # calculate mean of attention matrices:
-            for target_label in general_config.CLASS_LABELS.values():
+            for target_label in config.general_config.CLASS_LABELS.values():
                 for layer in range(len(attentions_all_layers[target_label])):
                     for head in range(len(attentions_all_layers[target_label][layer])):
                         attentions_all_layers[target_label][layer][head] = attentions_all_layers[target_label][layer][
                                                                                head] / count_class_samples[target_label]
 
-        if general_config.TASK_TYPE == 'distance_cones_analysis':
-            distance_cones_analysis(distance_cones, distance_cones_1_sample)
+        if config.general_config.TASK_TYPE == 'distance_cones_analysis':
+            distance_cones_analysis(config, distance_cones, distance_cones_1_sample)
 
         # timing
         mean_syn = np.sum(timings) / len(timings)
@@ -632,7 +632,7 @@ class Tester(Classifier):
 
         print('DONE.')
 
-        # token_base_positions_axis = [f"{i*general_config.STRIDE-general_config.STRIDE+spike_gene_start}" for i in range(0,general_config.MAX_LENGTH)]
+        # token_base_positions_axis = [f"{i*config.general_config.STRIDE-config.general_config.STRIDE+spike_gene_start}" for i in range(0,config.general_config.MAX_LENGTH)]
 
         attentions = {'attentions_all_layers': attentions_all_layers,
                       'attentions_all_layers_thresh': attentions_all_layers_thresh,

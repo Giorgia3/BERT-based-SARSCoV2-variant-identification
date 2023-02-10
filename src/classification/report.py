@@ -7,12 +7,10 @@ import pandas as pd
 import seaborn as sns
 from matplotlib import pyplot as plt
 from sklearn.preprocessing import LabelBinarizer
-
-from src.utils import paths_config, general_config
 from src.utils.general_utils import get_inverted_class_labels_dict
 
 
-def show_train_stats_and_plots(training_stats, train_steps_loss):
+def show_train_stats_and_plots(config, training_stats, train_steps_loss):
     print('Results:')
     # Display floats with two decimal places.
     pd.set_option('precision', 2)
@@ -49,7 +47,7 @@ def show_train_stats_and_plots(training_stats, train_steps_loss):
     plt.xticks([1, 2, 3, 4])
 
     plt.show()
-    fig_path = Path(paths_config.outputs_dir) / 'trainval.jpg'
+    fig_path = Path(config.paths_config.outputs_dir) / 'trainval.jpg'
     fig.savefig(fig_path)
 
     fig2 = plt.figure(2, figsize=(30, 6))
@@ -62,11 +60,11 @@ def show_train_stats_and_plots(training_stats, train_steps_loss):
     plt.legend()
 
     plt.show()
-    fig_path2 = Path(paths_config.outputs_dir) / 'train_steps.jpg'
+    fig_path2 = Path(config.paths_config.outputs_dir) / 'train_steps.jpg'
     fig2.savefig(fig_path2)
 
 
-def confusion_matrix_plot(targets_labels, outputs_labels, path, taskname=""):
+def confusion_matrix_plot(config, targets_labels, outputs_labels, path, taskname=""):
     confusion_matr = metrics.confusion_matrix(targets_labels, outputs_labels)
     plt.figure()
     plt.figure(figsize=(15, 15))
@@ -75,7 +73,7 @@ def confusion_matrix_plot(targets_labels, outputs_labels, path, taskname=""):
     plt.ylabel('True label', fontsize=21)
     plt.xlabel('Predicted label', fontsize=21)
     curr_xticks, curr_xlabels = plt.xticks()
-    inv_class_labels_dict = get_inverted_class_labels_dict()
+    inv_class_labels_dict = get_inverted_class_labels_dict(config)
     plt.xticks(curr_xticks, labels=[inv_class_labels_dict[int(t.get_text())] for t in curr_xlabels], rotation=90,
                fontsize=20)
     curr_yticks, curr_ylabels = plt.yticks()
@@ -90,7 +88,7 @@ def confusion_matrix_plot(targets_labels, outputs_labels, path, taskname=""):
     plt.figure()
 
 
-def plot_PRC(y, y_score, y_pred, path):
+def plot_PRC(config, y, y_score, y_pred, path):
     fig = plt.figure(figsize=(8, 8))
     ax = fig.gca()
     ax.set_xlim([-0.1, 1.1])
@@ -122,37 +120,36 @@ def plot_PRC(y, y_score, y_pred, path):
     #     average_precision=average_precision["micro"])
     # display.plot()
     # _ = display.ax_.set_title(f"Precision-Recall curve micro-averaged over all classes (AP={average_precision['micro']})")
-    def multiclass_prc(y_test, y_score, y_pred, average="micro"):
+    def multiclass_prc(config, y_test, y_score, y_pred, average="micro"):
         lb = LabelBinarizer()
         lb.fit(y_test)
         y_test = lb.transform(y_test)
         y_pred = lb.transform(y_pred)
 
-        for (idx, c_label) in enumerate(general_config.CLASS_LABELS.keys()):
+        for (idx, c_label) in enumerate(config.general_config.CLASS_LABELS.keys()):
             display = metrics.PrecisionRecallDisplay.from_predictions(y_test[:, idx].astype(int), y_pred[:, idx],
                                                                       name=c_label)
             display.plot(ax=ax)
         # ax.plot(fpr, fpr, 'b-', label = 'Random Guessing')
         return metrics.average_precision_score(y_test, y_pred, average=average)
 
-    print('AP score:', multiclass_prc(y, y_score, y_pred))
+    print('AP score:', multiclass_prc(config, y, y_score, y_pred))
     ax.set_xlabel('Recall')
     ax.set_ylabel('Precision')
     # fig.show()
     fig.savefig(Path(path) / 'prc.png')
 
 
-def ROC_curve_plot(targets_labels, outputs_labels, path, taskname="", figsize=(17, 6)):
+def ROC_curve_plot(config, targets_labels, outputs_labels, path, taskname="", figsize=(17, 6)):
     fpr = dict()
     tpr = dict()
     roc_auc = dict()
-    labels_dict = {class_label: [[], []] for class_label in general_config.CLASS_LABELS.values()}
+    labels_dict = {class_label: [[], []] for class_label in config.general_config.CLASS_LABELS.values()}
     for i in range(len(targets_labels)):
         labels_dict[targets_labels[i]][0].append(targets_labels[i])
         labels_dict[targets_labels[i]][1].append(outputs_labels[i])
 
     for class_label, tgt_out_labels in labels_dict.items():
-        print("CLASSSSS")
         print(class_label)
         print(tgt_out_labels[0])
         print(tgt_out_labels[1])
@@ -177,12 +174,12 @@ def ROC_curve_plot(targets_labels, outputs_labels, path, taskname="", figsize=(1
     plt.show()
 
 
-def final_statistics(target_labels, output_labels, output_logits, log_file, taskname, logits=None, target_names=None):
+def final_statistics(config, target_labels, output_labels, log_file, taskname, logits=None, target_names=None):
     accuracy = metrics.accuracy_score(target_labels, output_labels)
     f1_score_micro = metrics.f1_score(target_labels, output_labels, average='micro')
     f1_score_macro = metrics.f1_score(target_labels, output_labels, average='macro')
     if target_names == None:
-        target_names = general_config.CLASS_LABELS
+        target_names = config.general_config.CLASS_LABELS
     specificity = {}
     for l_name, l in target_names.items():
         prec, recall, _, _ = metrics.precision_recall_fscore_support(target_labels == l,
@@ -199,7 +196,7 @@ def final_statistics(target_labels, output_labels, output_logits, log_file, task
     print(f"F1 Score (Macro) = {f1_score_macro}")
     print(f"Specificity:\n{json.dumps(specificity, indent=4)}\n")
     print(f"Classification report:\n{str(classification_report)}")
-    confusion_matrix_plot(target_labels, output_labels, paths_config.outputs_dir, taskname)
+    confusion_matrix_plot(config, target_labels, output_labels, config.paths_config.outputs_dir, taskname)
     # plot_PRC(target_labels, output_logits, output_labels, outputs_dir)
     with open(log_file, 'a') as log_fp:
         log_fp.write(f"\n{taskname}:\n")
@@ -212,10 +209,10 @@ def final_statistics(target_labels, output_labels, output_logits, log_file, task
         log_fp.write(f"Confusion matrix:\n{confusion_matr}\n")
     if logits:
         logits_pos_score = [x[target_labels[i]] for i, x in enumerate(logits)]
-        ROC_curve_plot(target_labels, logits_pos_score, paths_config.outputs_dir, taskname)
+        ROC_curve_plot(config, target_labels, logits_pos_score, config.paths_config.outputs_dir, taskname)
 
 
-def find_best_positions(final_data, min_score=0.8, threshold=0.5):
+def find_best_positions(config, final_data, min_score=0.8, threshold=0.5):
     best_positions = None
 
     outputs_labels = np.argmax(final_data['outputs'], axis=1)
@@ -237,7 +234,7 @@ def find_best_positions(final_data, min_score=0.8, threshold=0.5):
     best_positions = [i for i, perc in enumerate(np.asarray(grouped_df['percents'])) if perc > threshold]
 
     print(f"Best positions: {best_positions}")
-    with open(paths_config.log_file, 'a') as log_fp:
+    with open(config.paths_config.log_file, 'a') as log_fp:
         log_fp.write(
             f"\nBest positions (i.e. those with >{threshold * 100}% of chunks with correct prediction and score>{min_score}):\n")
         log_fp.write(f"=======================================================================================\n")
@@ -250,14 +247,14 @@ def find_best_positions(final_data, min_score=0.8, threshold=0.5):
     plt.yticks(np.arange(0, 1, 0.1))
     plt.grid()
     plt.axhline(y=threshold, color='r', linestyle='-')
-    fig_path = Path(paths_config.outputs_dir) / f"percent_pos.jpg"
+    fig_path = Path(config.paths_config.outputs_dir) / f"percent_pos.jpg"
     fig.savefig(fig_path)
     plt.show()
 
     return best_positions
 
 
-def per_sample_result_computation(final_data, best_positions, min_score=0.8, taskname='', filter_positions=True,
+def per_sample_result_computation(config, final_data, best_positions, min_score=0.8, taskname='', filter_positions=True,
                                   filter_score=True):
     targets_dict = {}
     preds_dict = {}
@@ -301,7 +298,7 @@ def per_sample_result_computation(final_data, best_positions, min_score=0.8, tas
         counts_sorted.sort(reverse=True)
         if len(preds_dict[seq_id]['counts']) == 0 or (
                 len(counts_sorted) > 1 and all(element == counts_sorted[0] for element in counts_sorted)):
-            preds_dict[seq_id]['prediction'] = 'uncertain'
+            preds_dict[seq_id]['prediction'] = ['uncertain']
         else:
             majority_class_index = np.argmax(preds_dict[seq_id]['counts'])
             preds_dict[seq_id]['prediction'] = preds_dict[seq_id]['outputs_label'][majority_class_index]
@@ -312,10 +309,10 @@ def per_sample_result_computation(final_data, best_positions, min_score=0.8, tas
     target_labels = []
     output_labels = []
 
-    with open(paths_config.log_file, 'a') as log_fp:
+    with open(config.paths_config.log_file, 'a') as log_fp:
         for seq_id in targets_dict.keys():
             tot_count += 1
-            if preds_dict[seq_id]['prediction'] == 'uncertain':
+            if preds_dict[seq_id]['prediction'] == ['uncertain']:
                 uncertain_pred_count += 1
             else:
                 target_labels.append(targets_dict[seq_id])
@@ -326,7 +323,7 @@ def per_sample_result_computation(final_data, best_positions, min_score=0.8, tas
             log_fp.write(
                 f"seq: {seq_id}\t target: {targets_dict[seq_id]}\t predicted: {preds_dict[seq_id]['prediction']}\n")
 
-    final_statistics(target_labels, output_labels, paths_config.log_file,
+    final_statistics(config, target_labels, output_labels, config.paths_config.log_file,
                      f"{taskname} grouped by samples, filter_positions={filter_positions}, filter_score={filter_score}, min_score={min_score}")
 
     print(f"Correct predictions: {correct_pred_count}/{tot_count} -> {correct_pred_count / tot_count}")
@@ -334,7 +331,7 @@ def per_sample_result_computation(final_data, best_positions, min_score=0.8, tas
         f"Wrong predictions: {tot_count - correct_pred_count - uncertain_pred_count}/{tot_count} -> {(tot_count - correct_pred_count - uncertain_pred_count) / tot_count}")
     print(f"Uncertain predictions: {uncertain_pred_count}/{tot_count} -> {uncertain_pred_count / tot_count}")
 
-    with open(paths_config.log_file, 'a') as log_fp:
+    with open(config.paths_config.log_file, 'a') as log_fp:
         log_fp.write(f"Correct predictions: {correct_pred_count}/{tot_count} -> {correct_pred_count / tot_count}\n")
         log_fp.write(
             f"Wrong predictions: {tot_count - correct_pred_count - uncertain_pred_count}/{tot_count} -> {(tot_count - correct_pred_count - uncertain_pred_count) / tot_count}\n")
@@ -342,7 +339,7 @@ def per_sample_result_computation(final_data, best_positions, min_score=0.8, tas
             f"Uncertain predictions: {uncertain_pred_count}/{tot_count} -> {uncertain_pred_count / tot_count}\n")
 
 
-def show_test_plots(accuracies):
+def show_test_plots(config, accuracies):
     # Create a barplot showing the accuracy score for each batch of test samples.
     fig = plt.figure(figsize=(12, 6))
     ax = sns.lineplot(x=list(range(len(accuracies))), y=accuracies, ci=None)
@@ -352,5 +349,5 @@ def show_test_plots(accuracies):
     plt.xlabel('Batch #')
 
     plt.show()
-    fig_path = Path(paths_config.outputs_dir) / 'test.jpg'
+    fig_path = Path(config.paths_config.outputs_dir) / 'test.jpg'
     fig.savefig(fig_path)

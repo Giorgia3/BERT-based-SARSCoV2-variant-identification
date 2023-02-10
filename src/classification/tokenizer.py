@@ -6,7 +6,6 @@ import numpy as np
 from matplotlib import pyplot as plt
 from tqdm import tqdm
 from transformers import BertTokenizer, AutoTokenizer
-from src.utils import paths_config, general_config
 
 
 def seq2kmer(seq, k, stride, string_format=False):
@@ -46,21 +45,21 @@ class Tokenizer:
     def __len__(self):
         return len(self.tokenizer)
 
-    def __compute_token_count(self):
+    def __compute_token_count(self, config):
         if self.token_count is not None: # already computed
             return
         else:
             self.token_count = {}
             # compute the number of occurrencies of each token in the training dataset:
             # if token counts already computed load them from file
-            if os.path.exists(paths_config.token_count_file):
+            if os.path.exists(config.paths_config.token_count_file):
                 print("Token count file already exists.")
-                with open(paths_config.token_count_file) as token_count_fp:
+                with open(config.paths_config.token_count_file) as token_count_fp:
                     csvreader = csv.reader(token_count_fp, delimiter=',')
                     for line in tqdm(csvreader):
                         self.token_count[line[0]] = int(line[1])
             else:
-                with open(paths_config.train_file) as train_fp, open(paths_config.token_count_file, 'w') as token_count_fp:
+                with open(config.paths_config.train_file) as train_fp, open(config.paths_config.token_count_file, 'w') as token_count_fp:
                     train_reader = csv.reader(train_fp, delimiter=',')
                     # loop on training data
                     for line in tqdm(train_reader):
@@ -69,10 +68,10 @@ class Tokenizer:
                         pos = line[2]
                         seq = line[3]
                         # split sequence/chunk in kmers
-                        tokens = seq2kmer(seq, general_config.K, general_config.STRIDE, string_format=True)
+                        tokens = seq2kmer(seq, config.general_config.K, config.general_config.STRIDE, string_format=True)
                         # update token count
                         for count, tok in enumerate(tokens):
-                            # if count > general_config.MAX_LENGTH-2: #consider only tokens <MAX_LENGTH
+                            # if count > config.general_config.MAX_LENGTH-2: #consider only tokens <MAX_LENGTH
                             #     break
                             if tok in self.token_count:
                                 self.token_count[tok] += 1
@@ -83,48 +82,48 @@ class Tokenizer:
                     for key, value in self.token_count.items():
                         csvwriter.writerow([key, value])
 
-    def plot_kmers_histogram(self):
-        self.__compute_token_count()
+    def plot_kmers_histogram(self, config):
+        self.__compute_token_count(config)
 
         # plot sorted token count histogram to find elbow, i.e. number of tokens which contribute to most of token occurrences
         token_count_ordered = {k: v for k, v in sorted(self.token_count.items(), key=lambda item: item[1], reverse=True)}
         fig = plt.figure(figsize=(20, 10))
         plt.step(range(len(token_count_ordered.keys())), list(token_count_ordered.values()), color='b')
-        fig.suptitle(f"Ordered token occurrencies (k={general_config.K}, stride={general_config.STRIDE})", y=0.95,
+        fig.suptitle(f"Ordered token occurrencies (k={config.general_config.K}, stride={config.general_config.STRIDE})", y=0.95,
                      fontsize=20)
         plt.xlabel(f'Tokens (tot num: {len(token_count_ordered)})', fontsize=16)
         plt.xticks(np.arange(0, len(token_count_ordered), 100), rotation=90)
         plt.ylabel('Num. occurrences', fontsize=16)
         plt.yticks(np.arange(0, max(list(token_count_ordered.values())), 1000))
-        fig_path = Path(paths_config.tokens_histograms_dir) / f"k{general_config.K}_s{general_config.STRIDE}.jpg"
+        fig_path = Path(config.paths_config.tokens_histograms_dir) / f"k{config.general_config.K}_s{config.general_config.STRIDE}.jpg"
         fig.savefig(fig_path)
         plt.grid()
         plt.show()
 
-    def add_tokens_to_bert_vocabulary(self, classifier):
-        self.__compute_token_count()
+    def add_tokens_to_bert_vocabulary(self, config):
+        self.__compute_token_count(config)
 
         # select minimum n. occurrences at elbow to determine which are the most frequent tokens
         print(f"Min. n. occurrencies for kmers to be added as tokens to BERT vocabulary:")
-        general_config.MIN_N_OCCUR_KMER = 0
+        config.general_config.MIN_N_OCCUR_KMER = 0
 
-        with open(paths_config.log_file, 'a') as log_fp:
-            print(f"MIN_N_OCCUR_KMER = {general_config.MIN_N_OCCUR_KMER}")
+        with open(config.paths_config.log_file, 'a') as log_fp:
+            print(f"MIN_N_OCCUR_KMER = {config.general_config.MIN_N_OCCUR_KMER}")
             log_fp.write(f"Min. n. occurrencies for kmers to be added as tokens to BERT vocabulary:\n")
             log_fp.write(f"========================================================================\n")
-            log_fp.write(f"MIN_N_OCCUR_KMER = {general_config.MIN_N_OCCUR_KMER}\n")
+            log_fp.write(f"MIN_N_OCCUR_KMER = {config.general_config.MIN_N_OCCUR_KMER}\n")
 
-        if general_config.ADD_KMER_TOKENS_TO_VOCAB:
+        if config.general_config.ADD_KMER_TOKENS_TO_VOCAB:
             # extract most frequent tokens based on min n. of occurrences
-            frequent_tokens_in_train_data = [k for k, v in self.token_count.items() if v > general_config.MIN_N_OCCUR_KMER]
+            frequent_tokens_in_train_data = [k for k, v in self.token_count.items() if v > config.general_config.MIN_N_OCCUR_KMER]
             print(
-                f"Num. frequent (>{general_config.MIN_N_OCCUR_KMER} occurrences) tokens in train dataset: {len(frequent_tokens_in_train_data)}")
+                f"Num. frequent (>{config.general_config.MIN_N_OCCUR_KMER} occurrences) tokens in train dataset: {len(frequent_tokens_in_train_data)}")
 
             # add most frequent tokens to BERT vocabulary
             print('Adding most frequent new tokens to Bert tokenizer...')
             num_added_toks = self.tokenizer.add_tokens(frequent_tokens_in_train_data)
             print(f'Num. of new tokens added: {num_added_toks}')
-            with open(paths_config.log_file, 'a') as log_fp:
+            with open(config.paths_config.log_file, 'a') as log_fp:
                 log_fp.write(f"Num. of new frequent tokens added to BERT vocabulary: {num_added_toks}\n")
                 log_fp.write('--------------------------------------------------------------\n')
 

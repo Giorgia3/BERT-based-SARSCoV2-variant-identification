@@ -1,18 +1,14 @@
 import csv
 import os
 from pathlib import Path
-from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 from Bio import SeqIO
-from src.utils.bio_config import spike_gene_start, spike_gene_end
 import pandas as pd
 import matplotlib.pyplot as plt
 import pysam
-from src.utils.paths_config import seqs_index_file
-from src.utils import general_utils, paths_config, general_config
-from src.utils.general_utils import get_train_val_test_sizes
+from src.utils import general_utils
 
 
 def read_fasta(fp):
@@ -42,7 +38,7 @@ def split_fixed_len_chunks(seq, chunk_len, chunk_stride):
     return chunks
 
 
-def reformat_fasta(input_file, output_file, duplicates_file, label, log_fp_trainval):
+def reformat_fasta(config, input_file, output_file, duplicates_file, label, log_fp_trainval):
     """
     Read fasta file, possibily split each sequence into chunks of length CHUNK_LEN and
     reformat: '[label], [id], [base1], [base2], ..., [baseN]'
@@ -75,15 +71,15 @@ def reformat_fasta(input_file, output_file, duplicates_file, label, log_fp_train
             ids_dict[seq_id] = [len(ids_dict) + 1, label]
             id = ids_dict[seq_id][0]
 
-            if general_config.SPLIT_DATA_IN_CHUNKS or general_config.ALIGNMENT:
+            if config.general_config.SPLIT_DATA_IN_CHUNKS or config.general_config.ALIGNMENT:
                 seq_len_info['n_seq'] += 1
 
                 # split sequence in chunks
-                chunks = split_fixed_len_chunks(seq, general_config.CHUNK_LEN, general_config.CHUNK_STRIDE)
+                chunks = split_fixed_len_chunks(seq, config.general_config.CHUNK_LEN, config.general_config.CHUNK_STRIDE)
 
                 # reformat chunk info and write on file
                 # (NB: each chunk is identified by its sequence id and its position in the sequence)
-                if general_config.ALIGNMENT:
+                if config.general_config.ALIGNMENT:
                     seq_records = []
                     for pos, c in enumerate(chunks):
                         # FASTA format
@@ -122,7 +118,7 @@ def reformat_fasta(input_file, output_file, duplicates_file, label, log_fp_train
 
             # stop earlier to consider only MAX_N_SAMPLES_PER_CLASS samples per class
             count += 1
-            if general_config.REDUCE_N_INPUT_SAMPLES and count >= general_config.MAX_N_SAMPLES_PER_CLASS:
+            if config.general_config.REDUCE_N_INPUT_SAMPLES and count >= config.general_config.MAX_N_SAMPLES_PER_CLASS:
                 break
 
         # print length statistics
@@ -131,23 +127,23 @@ def reformat_fasta(input_file, output_file, duplicates_file, label, log_fp_train
         print(f"\tN. duplicated sequences: {seq_len_info['n_dup']}")
         print(f"\tTot. n. chunks: {seq_len_info['sum']}")
         print(
-            f"\tMin. {'n. chunks per sequence' if general_config.SPLIT_DATA_IN_CHUNKS else 'len'}: {seq_len_info['min']}")
+            f"\tMin. {'n. chunks per sequence' if config.general_config.SPLIT_DATA_IN_CHUNKS else 'len'}: {seq_len_info['min']}")
         print(
-            f"\tMax. {'n. chunks per sequence' if general_config.SPLIT_DATA_IN_CHUNKS else 'len'}: {seq_len_info['max']}")
+            f"\tMax. {'n. chunks per sequence' if config.general_config.SPLIT_DATA_IN_CHUNKS else 'len'}: {seq_len_info['max']}")
         print(
-            f"\tAvg. {'n. chunks per sequence' if general_config.SPLIT_DATA_IN_CHUNKS else 'len'}: {seq_len_info['avg']}")
+            f"\tAvg. {'n. chunks per sequence' if config.general_config.SPLIT_DATA_IN_CHUNKS else 'len'}: {seq_len_info['avg']}")
         print()
         log_fp_trainval.write(f"\tN. sequences: {seq_len_info['n_seq']}\n")
         log_fp_trainval.write(f"\tN. duplicated sequences: {seq_len_info['n_dup']}\n")
         log_fp_trainval.write(f"\tTot. n. chunks: {seq_len_info['sum']}\n")
         log_fp_trainval.write(
-            f"\tMin. {'n. chunks per sequence' if general_config.SPLIT_DATA_IN_CHUNKS else 'len'}: {seq_len_info['min']}\n")
+            f"\tMin. {'n. chunks per sequence' if config.general_config.SPLIT_DATA_IN_CHUNKS else 'len'}: {seq_len_info['min']}\n")
         log_fp_trainval.write(
-            f"\tMax. {'n. chunks per sequence' if general_config.SPLIT_DATA_IN_CHUNKS else 'len'}: {seq_len_info['max']}\n")
+            f"\tMax. {'n. chunks per sequence' if config.general_config.SPLIT_DATA_IN_CHUNKS else 'len'}: {seq_len_info['max']}\n")
         log_fp_trainval.write(
-            f"\tAvg. {'n. chunks per sequence' if general_config.SPLIT_DATA_IN_CHUNKS else 'len'}: {seq_len_info['avg']}\n\n")
+            f"\tAvg. {'n. chunks per sequence' if config.general_config.SPLIT_DATA_IN_CHUNKS else 'len'}: {seq_len_info['avg']}\n\n")
 
-    with open(paths_config.ids_dict_file, 'w') as ids_dict_fp:
+    with open(config.paths_config.ids_dict_file, 'w') as ids_dict_fp:
         ids_dict_fp.write(f"seq_id,id,label\n")
         for seq_id, id_label_list in ids_dict.items():
             ids_dict_fp.write(f"{seq_id},{id_label_list[0]},{id_label_list[1]}\n")
@@ -155,19 +151,19 @@ def reformat_fasta(input_file, output_file, duplicates_file, label, log_fp_train
     return index, seq_len_info
 
 
-def reformat_input_data():
+def reformat_input_data(config):
     print("Reformatting input data")
     # check if all input paths exist
-    for _, input_file in paths_config.variant_files.items():
+    for _, input_file in config.paths_config.variant_files.items():
         if not os.path.exists(input_file):
             raise FileNotFoundError(f"File {input_file} not found")
 
     # if reformatted data already available continue, else reformat
-    if os.path.exists(paths_config.reformatted_seqs_file):
+    if os.path.exists(config.paths_config.reformatted_seqs_file):
         print(
-            f"Data already reformatted in {paths_config.reformatted_seqs_file} file. See {paths_config.log_file} for data info.")
+            f"Data already reformatted in {config.paths_config.reformatted_seqs_file} file. See {config.paths_config.log_file} for data info.")
     else:
-        with open(paths_config.seqs_index_file_tmp, 'w') as seqs_index_fp, open(paths_config.log_file, 'w') as log_fp:
+        with open(config.paths_config.seqs_index_file_tmp, 'w') as seqs_index_fp, open(config.paths_config.log_file, 'w') as log_fp:
             tot_n_seq = 0
             tot_sum_len = 0
             tot_max_len_list = []
@@ -177,16 +173,17 @@ def reformat_input_data():
             log_fp.write(f"===============\n")
 
             # read each variant input file and reformat, possibly splitting sequences into chunks
-            for variant_name, input_file in paths_config.variant_files.items():
+            for variant_name, input_file in config.paths_config.variant_files.items():
                 print(
-                    f"Variant name: {variant_name} | Label: {general_config.CLASS_LABELS[variant_name]} | File: {input_file}")
+                    f"Variant name: {variant_name} | Label: {config.general_config.CLASS_LABELS[variant_name]} | File: {input_file}")
                 log_fp.write(
-                    f"Variant name: {variant_name} | Label: {general_config.CLASS_LABELS[variant_name]} | File: {input_file}\n")
+                    f"Variant name: {variant_name} | Label: {config.general_config.CLASS_LABELS[variant_name]} | File: {input_file}\n")
 
-                variant_seqs_index, variant_seq_len_info = reformat_fasta(input_file,
-                                                                          paths_config.reformatted_seqs_file,
-                                                                          paths_config.duplicated_seqs_file,
-                                                                          general_config.CLASS_LABELS[variant_name],
+                variant_seqs_index, variant_seq_len_info = reformat_fasta(config,
+                                                                          input_file,
+                                                                          config.paths_config.reformatted_seqs_file,
+                                                                          config.paths_config.duplicated_seqs_file,
+                                                                          config.general_config.CLASS_LABELS[variant_name],
                                                                           log_fp)
 
                 seqs_index_csvwriter = csv.writer(seqs_index_fp)
@@ -203,21 +200,21 @@ def reformat_input_data():
             print(f'Tot info:')
             print(f'\tN. seqences: {tot_n_seq}')
             print(f'\tTot n. chunks: {tot_sum_len}')
-            print(f"\tMin {'n. chunks' if general_config.SPLIT_DATA_IN_CHUNKS else 'len'}: {tot_min_len}")
-            print(f"\tMax {'n. chunks' if general_config.SPLIT_DATA_IN_CHUNKS else 'len'}: {tot_max_len}")
-            print(f"\tAvg {'n. chunks' if general_config.SPLIT_DATA_IN_CHUNKS else 'len'}: {tot_sum_len / tot_n_seq}")
+            print(f"\tMin {'n. chunks' if config.general_config.SPLIT_DATA_IN_CHUNKS else 'len'}: {tot_min_len}")
+            print(f"\tMax {'n. chunks' if config.general_config.SPLIT_DATA_IN_CHUNKS else 'len'}: {tot_max_len}")
+            print(f"\tAvg {'n. chunks' if config.general_config.SPLIT_DATA_IN_CHUNKS else 'len'}: {tot_sum_len / tot_n_seq}")
             log_fp.write(f'Tot info:\n')
             log_fp.write(f'\tN. seqences: {tot_n_seq}\n')
             log_fp.write(
-                f"\tMin {'n. chunks' if general_config.SPLIT_DATA_IN_CHUNKS else 'len'}: {min(tot_min_len_list)}\n")
+                f"\tMin {'n. chunks' if config.general_config.SPLIT_DATA_IN_CHUNKS else 'len'}: {min(tot_min_len_list)}\n")
             log_fp.write(
-                f"\tMax {'n. chunks' if general_config.SPLIT_DATA_IN_CHUNKS else 'len'}: {max(tot_max_len_list)}\n")
+                f"\tMax {'n. chunks' if config.general_config.SPLIT_DATA_IN_CHUNKS else 'len'}: {max(tot_max_len_list)}\n")
             log_fp.write(
-                f"\tAvg {'n. chunks' if general_config.SPLIT_DATA_IN_CHUNKS else 'len'}: {tot_sum_len / tot_n_seq}\n")
+                f"\tAvg {'n. chunks' if config.general_config.SPLIT_DATA_IN_CHUNKS else 'len'}: {tot_sum_len / tot_n_seq}\n")
             log_fp.write('--------------------------------------------------------------\n')
     print("Done")
 
-def __fetch_aligned_spike_seqs(aligned_seqs_file, class_num):
+def __fetch_aligned_spike_seqs(config, aligned_seqs_file, class_num):
     if not os.path.exists(aligned_seqs_file):
         print(f"Error: file {aligned_seqs_file} not found.")
     print(f'Processing aligned sequences of class {class_num}.')
@@ -257,9 +254,9 @@ def __fetch_aligned_spike_seqs(aligned_seqs_file, class_num):
 
                 n_mapped += 1
                 # check if read mapped over a portion of the spike gene
-                if (aligned_pos_start < spike_gene_start and aligned_pos_end > spike_gene_start) \
-                        or (aligned_pos_start > spike_gene_start and aligned_pos_end < spike_gene_end) \
-                        or (aligned_pos_start < spike_gene_end and aligned_pos_end > spike_gene_end):
+                if (aligned_pos_start < config.bio_config.spike_gene_start and aligned_pos_end > config.bio_config.spike_gene_start) \
+                        or (aligned_pos_start > config.bio_config.spike_gene_start and aligned_pos_end < config.bio_config.spike_gene_end) \
+                        or (aligned_pos_start < config.bio_config.spike_gene_end and aligned_pos_end > config.bio_config.spike_gene_end):
 
                     # print(f'{qname} {aligned_pos_start} {aligned_pos_end}')
                     # i +=1
@@ -281,26 +278,26 @@ def __fetch_aligned_spike_seqs(aligned_seqs_file, class_num):
 
                     # truncate chunks with bases outside of the spike gene
                     # 1st case: first bases of read mapped outside of spike region
-                    if aligned_pos_start < spike_gene_start < aligned_pos_end:
+                    if aligned_pos_start < config.bio_config.spike_gene_start < aligned_pos_end:
                         # truncate aligned chunk
-                        aligned_chunk_spike = aligned_chunk[spike_gene_start - aligned_pos_start:]
+                        aligned_chunk_spike = aligned_chunk[config.bio_config.spike_gene_start - aligned_pos_start:]
                         # modify start position
-                        aligned_pos_start = spike_gene_start
+                        aligned_pos_start = config.bio_config.spike_gene_start
                         # truncate reference positions of aligment
                         for idx, pos in enumerate(aligned_reference_positions):
-                            if pos != None and pos >= spike_gene_start:
+                            if pos != None and pos >= config.bio_config.spike_gene_start:
                                 aligned_reference_positions_spike = aligned_reference_positions[idx:]
                                 break
 
                     # 2nd case: last bases of read mapped outside of spike region
-                    elif aligned_pos_start < spike_gene_end < aligned_pos_end:
+                    elif aligned_pos_start < config.bio_config.spike_gene_end < aligned_pos_end:
                         # truncate aligned chunk
-                        aligned_chunk_spike = aligned_chunk[:spike_gene_end - aligned_pos_start + 1]
+                        aligned_chunk_spike = aligned_chunk[:config.bio_config.spike_gene_end - aligned_pos_start + 1]
                         # modify end position
-                        aligned_pos_end = spike_gene_end
+                        aligned_pos_end = config.bio_config.spike_gene_end
                         # truncate reference positions of aligment
                         for idx, pos in enumerate(aligned_reference_positions):
-                            if pos != None and pos > spike_gene_end:
+                            if pos != None and pos > config.bio_config.spike_gene_end:
                                 aligned_reference_positions_spike = aligned_reference_positions[:idx]
                                 break
 
@@ -311,9 +308,9 @@ def __fetch_aligned_spike_seqs(aligned_seqs_file, class_num):
 
                     aligned_seqs_dict[id]['aligned_chunk_spike_list'].append(aligned_chunk_spike)
                     aligned_seqs_dict[id]['reference_positions_list'].append(aligned_reference_positions_spike)
-                    relative_aligned_pos_start = aligned_pos_start - spike_gene_start
+                    relative_aligned_pos_start = aligned_pos_start - config.bio_config.spike_gene_start
                     aligned_seqs_dict[id]['pos_start_list'].append(relative_aligned_pos_start)
-                    relative_aligned_pos_end = aligned_pos_end - spike_gene_start
+                    relative_aligned_pos_end = aligned_pos_end - config.bio_config.spike_gene_start
                     aligned_seqs_dict[id]['pos_end_list'].append(relative_aligned_pos_end)
 
                     # if (relative_aligned_pos_end-relative_aligned_pos_start+1) != len(aligned_chunk_spike):
@@ -340,7 +337,7 @@ def __fetch_aligned_spike_seqs(aligned_seqs_file, class_num):
     samfile.close()
 
     # write sequences index on file
-    with open(paths_config.seqs_index_file, 'a') as seqs_index_fp:
+    with open(config.paths_config.seqs_index_file, 'a') as seqs_index_fp:
         seqs_index = [[int(id), aligned_seqs_dict[id]['label']] for id in aligned_seqs_dict]
         seqs_index_csvwriter = csv.writer(seqs_index_fp)
         seqs_index_csvwriter.writerows(seqs_index)
@@ -352,7 +349,7 @@ def __fetch_aligned_spike_seqs(aligned_seqs_file, class_num):
     print(f'\tn_unmapped={n_unmapped} (skipped)')
     print(f'\tn_tot_flagged={n_tot_flagged}')
 
-    with open(paths_config.log_file, 'a') as log_fp:
+    with open(config.paths_config.log_file, 'a') as log_fp:
         log_fp.write(f"Alignment of the Spike gene\n")
         log_fp.write(f"============================\n")
         log_fp.write(f'Skipped chunks and actions for class {class_num}:\n')
@@ -365,14 +362,14 @@ def __fetch_aligned_spike_seqs(aligned_seqs_file, class_num):
     return aligned_seqs_dict  # , seqs_index
 
 
-def __concat_spike_seqs_on_file(aligned_seqs_dict, cigars_file, reference_seq_file):
+def __concat_spike_seqs_on_file(config, aligned_seqs_dict, cigars_file, reference_seq_file):
     # get reference sequence
     with open(reference_seq_file, 'r') as reference_seq_fp:
         for _, reference_seq in read_fasta(reference_seq_fp):
             break
-        reference_seq_spike = reference_seq[spike_gene_start:spike_gene_end + 1]
+        reference_seq_spike = reference_seq[config.bio_config.spike_gene_start:config.bio_config.spike_gene_end + 1]
 
-    with open(paths_config.spike_seqs_file, 'a') as spike_seqs_fp, open(cigars_file, 'a') as cigars_fp:
+    with open(config.paths_config.spike_seqs_file, 'a') as spike_seqs_fp, open(cigars_file, 'a') as cigars_fp:
 
         # concatenated_alignments = reference_seq.copy()
 
@@ -417,8 +414,8 @@ def __concat_spike_seqs_on_file(aligned_seqs_dict, cigars_file, reference_seq_fi
                 prev_pos_end = pos_end
 
             # check if the last bases of reference are unmapped
-            if spike_gene_end - prev_pos_end > 0:
-                concatenated_alignment.extend(reference_seq_spike[prev_pos_end:spike_gene_end + 1])
+            if config.bio_config.spike_gene_end - prev_pos_end > 0:
+                concatenated_alignment.extend(reference_seq_spike[prev_pos_end:config.bio_config.spike_gene_end + 1])
 
             s = str(aligned_seqs_dict[id]['label']) + ',' + str(id) + ',' + str(0) + ',' + ''.join(
                 concatenated_alignment) + '\n'
@@ -427,54 +424,54 @@ def __concat_spike_seqs_on_file(aligned_seqs_dict, cigars_file, reference_seq_fi
             # TODO write cigars file
 
 
-def __run_bwa():
+def __run_bwa(config):
     print("Running BWA")
-    bwa_exe_path = str(Path(paths_config.bwa_bin_dir) / 'bwa')
-    bwa_script_path = Path(paths_config.main_dir) / 'src' / 'utils' / 'bwa.sh'
+    bwa_exe_path = str(Path(config.paths_config.bwa_bin_dir) / 'bwa')
+    bwa_script_path = Path(config.paths_config.main_dir) / 'src' / 'utils' / 'bwa.sh'
 
     #generate script
     with open(bwa_script_path, 'w') as bwa_script_fp:
         bwa_script_fp.write(f"# !/usr/bin/env sh\n")
         bwa_script_fp.write(f"pwd\n")
-        bwa_script_fp.write(f"{bwa_exe_path} index {paths_config.reference_seq_file}\n")
-        bwa_script_fp.write(f"{bwa_exe_path} mem {paths_config.reference_seq_file} {paths_config.reformatted_seqs_file} > {paths_config.aligned_seqs_file}\n")
+        bwa_script_fp.write(f"{bwa_exe_path} index {config.paths_config.reference_seq_file}\n")
+        bwa_script_fp.write(f"{bwa_exe_path} mem {config.paths_config.reference_seq_file} {config.paths_config.reformatted_seqs_file} > {config.paths_config.aligned_seqs_file}\n")
         bwa_script_fp.write(f"exit\n")
     os.system(f'wsl.exe -e sh -c {bwa_script_path}')
 
-    # cmd_generate_idx = f'wsl.exe ~ -e sh -c "{bwa_exe_path} index {paths_config.reference_seq_file}"'
-    # cmd_align = f'wsl.exe ~ -e sh -c  "{bwa_exe_path} mem {paths_config.reference_seq_file} {paths_config.reformatted_seqs_file} > {paths_config.aligned_seqs_file}"'
+    # cmd_generate_idx = f'wsl.exe ~ -e sh -c "{bwa_exe_path} index {config.paths_config.reference_seq_file}"'
+    # cmd_align = f'wsl.exe ~ -e sh -c  "{bwa_exe_path} mem {config.paths_config.reference_seq_file} {config.paths_config.reformatted_seqs_file} > {config.paths_config.aligned_seqs_file}"'
     # os.system(cmd_generate_idx)
     # os.system(cmd_align)
 
 
-def align_spike_sequences():
-    if os.path.exists(paths_config.aligned_seqs_file):
-        print(f"BWA already performed. SAM file available: {paths_config.aligned_seqs_file}")
+def align_spike_sequences(config):
+    if os.path.exists(config.paths_config.aligned_seqs_file):
+        print(f"BWA already performed. SAM file available: {config.paths_config.aligned_seqs_file}")
     else:
-        __run_bwa()
+        __run_bwa(config)
 
-    if general_config.SPIKE_REGION_ANALYSIS:
+    if config.general_config.SPIKE_REGION_ANALYSIS:
         print("Extracting spike region")
-        if os.path.exists(paths_config.spike_seqs_file):
-            print(f"Aligned spike gene sequences already available in {paths_config.spike_seqs_file} file.")
+        if os.path.exists(config.paths_config.spike_seqs_file):
+            print(f"Aligned spike gene sequences already available in {config.paths_config.spike_seqs_file} file.")
         else:
-            __run_bwa()
-            for class_num in range(len(general_config.CLASS_LABELS.keys())):
-                aligned_seqs_dict = __fetch_aligned_spike_seqs(paths_config.aligned_seqs_file, class_num)
-                __concat_spike_seqs_on_file(aligned_seqs_dict, paths_config.cigars_file, paths_config.reference_seq_file)
+            __run_bwa(config)
+            for class_num in range(len(config.general_config.CLASS_LABELS.keys())):
+                aligned_seqs_dict = __fetch_aligned_spike_seqs(config, config.paths_config.aligned_seqs_file, class_num)
+                __concat_spike_seqs_on_file(config, aligned_seqs_dict, config.paths_config.cigars_file, config.paths_config.reference_seq_file)
                 del aligned_seqs_dict
     print("Done")
 
 
 # def find_duplicated_seqs(filepath, seqs_index_dict, type_dataset, remove_dups=False):
-def __find_duplicated_seqs(filepath, seqs_index_dict, remove_dups=False):
+def __find_duplicated_seqs(config, filepath, seqs_index_dict, remove_dups=False):
     # if type_dataset not in ['train', 'val', 'test']:
     #     raise Exception('Not valid type_dataset: select train, val or test')
     title = f'total duplicates'
     tot_dups = 0
     tot_seqs = 0
     duplicates_line_num = []
-    with open(paths_config.log_file, 'a') as log_fp:
+    with open(config.paths_config.log_file, 'a') as log_fp:
         log_fp.write(f"{title}\n")
         log_fp.write(f"==============================\n")
 
@@ -507,7 +504,7 @@ def __find_duplicated_seqs(filepath, seqs_index_dict, remove_dups=False):
                 tot_dups += dup_mask.sum()
                 tot_seqs += len(dup_mask)
 
-                log_dups = f'{general_utils.get_inverted_class_labels_dict()[class_lab]} | n. duplicated seqs = {dup_seqs.sum()}/{len(dup_seqs)} ({dup_seqs.sum() / len(dup_seqs) * 100:.2f}%) | n. duplicated ids = {dup_ids.sum()}/{len(dup_ids)} ({dup_ids.sum() / len(dup_ids) * 100:.2f}%)'
+                log_dups = f'{general_utils.get_inverted_class_labels_dict(config)[class_lab]} | n. duplicated seqs = {dup_seqs.sum()}/{len(dup_seqs)} ({dup_seqs.sum() / len(dup_seqs) * 100:.2f}%) | n. duplicated ids = {dup_ids.sum()}/{len(dup_ids)} ({dup_ids.sum() / len(dup_ids) * 100:.2f}%)'
                 log_fp.write(f"{log_dups}\n")
                 print(log_dups)
 
@@ -521,7 +518,7 @@ def __find_duplicated_seqs(filepath, seqs_index_dict, remove_dups=False):
                 dirname = os.path.dirname(filepath)
                 filename = os.path.splitext(os.path.basename(filepath))[0]
                 filepath_no_dups = Path(dirname) / f'{filename}_no_dups.csv'
-                with open(filepath, 'r') as fp, open(filepath_no_dups, 'w') as fp_no_dups, open(seqs_index_file,
+                with open(filepath, 'r') as fp, open(filepath_no_dups, 'w') as fp_no_dups, open(config.paths_config.seqs_index_file,
                                                                                                 'w') as seqs_index_fp:
                     fp_no_dups_csvwriter = csv.writer(fp_no_dups)
                     seqs_index_csvwriter = csv.writer(seqs_index_fp)
@@ -555,24 +552,24 @@ def read_seqs_index(seqs_index_file):
     return seqs_index
 
 
-def check_duplicates():
+def check_duplicates(config):
     print("Searching for duplicates")
     seqs_index_dict = {}
-    seqs_index = read_seqs_index(seqs_index_file)
+    seqs_index = read_seqs_index(config.paths_config.seqs_index_file)
 
     for seq_n, seq_lab in seqs_index:
         if seq_lab not in seqs_index_dict:
             seqs_index_dict[seq_lab] = []
         seqs_index_dict[seq_lab].append(seq_n)
 
-    __find_duplicated_seqs(paths_config.input_seqs_file, seqs_index_dict, remove_dups=True)
+    __find_duplicated_seqs(config, config.paths_config.input_seqs_file, seqs_index_dict, remove_dups=True)
 
     # find_duplicated_seqs(train_file, seqs_index_dict, type_dataset="train")
     # find_duplicated_seqs(val_file, seqs_index_dict, type_dataset="val")
     # find_duplicated_seqs(test_file, seqs_index_dict, type_dataset="test", remove_dups=True)
 
     # print dups info
-    df_dups = pd.read_csv(Path(paths_config.preprocessed_data_dir) / 'dups_info.txt', delimiter=',', header=0)
+    df_dups = pd.read_csv(Path(config.paths_config.preprocessed_data_dir) / 'dups_info.txt', delimiter=',', header=0)
     df_dups['N. not duplicated'] = df_dups['tot'] - df_dups['dups']
     df_dups.rename(columns={'dups': 'N. duplicates', 'class': 'Class'}, inplace=True)
     df_dups_plot = df_dups.drop(columns=['percent', 'tot'])
@@ -582,7 +579,7 @@ def check_duplicates():
     print("Done")
 
 
-def write_test_size_info():
-    seqs_index = read_seqs_index(seqs_index_file)
-    with open(paths_config.trainvaltest_sizes_file, 'w') as trainvaltest_sizes_fp:
+def write_test_size_info(config):
+    seqs_index = read_seqs_index(config.paths_config.seqs_index_file)
+    with open(config.paths_config.trainvaltest_sizes_file, 'w') as trainvaltest_sizes_fp:
         trainvaltest_sizes_fp.write(f"test_data_size_seqs,{len(seqs_index)}\n")
