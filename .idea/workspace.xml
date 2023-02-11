@@ -3,17 +3,7 @@
   <component name="ChangeListManager">
     <list default="true" id="75de0111-60f0-4b65-91f5-f87f3929b753" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/analysis/attention.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/analysis/attention.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/classification/classifier.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/classification/classifier.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/classification/report.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/classification/report.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/classification/tokenizer.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/classification/tokenizer.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/classification/utils.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/classification/utils.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/attention_analysis_main.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/attention_analysis_main.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/preprocess_main.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/preprocess_main.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/test_main.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/test_main.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/preprocessing/data_generator.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/preprocessing/data_generator.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/preprocessing/preprocess.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/preprocessing/preprocess.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/utils/general_utils.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/utils/general_utils.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -53,16 +43,10 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "RunOnceActivity.OpenProjectViewOnStart": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
-    "WebServerToolWindowFactoryState": "false",
-    "last_opened_file_path": "C:/Users/d060403/workspace/BERT-based-SARSCoV2-variant-identification/src/utils/general_utils.py",
-    "settings.editor.selected.configurable": "com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable"
-  }
-}]]></component>
+  <component name="PropertiesComponent">
+    <property name="WebServerToolWindowFactoryState" value="false" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$" />
+  </component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="C:\Users\d060403\workspace\bert-covid\experiment\preprocessed_data" />
@@ -113,6 +97,7 @@
       <workItem from="1669367678711" duration="8739000" />
       <workItem from="1669394295580" duration="2536000" />
       <workItem from="1675961631491" duration="9640000" />
+      <workItem from="1676116639833" duration="1690000" />
     </task>
     <servers />
   </component>
@@ -129,6 +114,7 @@
         </entry>
       </map>
     </option>
+    <option name="oldMeFiltersMigrated" value="true" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/bert_covid$preprocess_main.coverage" NAME="preprocess_main Coverage Results" MODIFIED="1675947498879" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />

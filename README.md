@@ -1,5 +1,10 @@
-# bert-covid
+# BERT-based-SARSCoV2-variant-identification
+
+## Requirements
 
 
-# License
-Bert...... is distributed under a GPL-3.0 license.
+## Usage
+
+
+## License
+BERT-based-SARSCoV2-variant-identification is distributed under a GPL-3.0 license.
