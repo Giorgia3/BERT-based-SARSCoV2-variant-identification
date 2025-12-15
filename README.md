@@ -1,21 +1,12 @@
-# MS Thesis: An interpretable BERT-based architecture for SARS-CoV-2 variant identification
+# The geometry of BERT
 
-This repository contains the main code and data associated with the MS thesis:
-
-**"An interpretable BERT-based architecture for SARS-CoV-2 variant identification"** \
-Giorgia Ghione\
-MS Degree in Computer Engineering\
-Politecnico di Torino, 2022\
-Supervisors: Santa Di Cataldo, Marta Lovino, Giansalvo Cirrincione, Elisa Ficarra
-
-The full thesis is publicly available at: https://webthesis.biblio.polito.it/23527/
-
-This work was further developed and led to the publication of the article **"The geometry of BERT"** by Matteo Bonino, Giorgia Ghione, and Giansalvo Cirrincione. The article is available online at: https://arxiv.org/abs/2502.12033
+This repository contains the main code and data associated with the article **"The geometry of BERT"** by Matteo Bonino, Giorgia Ghione, and Giansalvo Cirrincione. The article is available online at: https://arxiv.org/abs/2502.12033
 
 
 ## Abstract
 
-The Covid-19 pandemic has posed many challenges in the medical diagnostics field. One of these has been the need for constant detection and monitoring of the SARS-CoV-2 circulating variants. The most common approach to reliably identify a SARS-CoV-2 variant is exploiting genomics. Such an approach has been enabled by the constant collection of genetic sequences of the virus globally. However, variant identification methods are usually resource-intensive. Thus, small medical laboratories can have issues due to limited diagnostic capacity. This thesis presents a deep learning method to successfully identify variants without requiring high computational resources and long delays. The contribution of this thesis is twofold: 1) the development of a Bidirectional Encoder Representations from Transformers (BERT) fine-tuning architecture for SARS-CoV-2 variant identification; 2) the mathematical and biological interpretation of the model by leveraging its self-attention mechanism. The developed method allows the analysis of the spike gene of SARS-CoV-2 genome samples to determine their variant quickly. The chosen neural network BERT is a Transformer-based model initially proposed for processing natural language sequences. However, it has been successfully applied to several other contexts, such as DNA/RNA sequence analysis. Therefore, BERT was fine-tuned to adapt to the genomic sequence domain, reaching an F1 score equal to 98.59% on the inference dataset: it proved effective in recognizing variants circulating to date. Since BERT relies on the self-attention mechanism, the interpretability of the model was investigated by analyzing its self-attention matrices and hidden weights. The resulting mathematical interpretation allowed the understanding of the biological meaning of the attention patterns produced by the network. Indeed, BERT extracts relevant biological information on variants by focusing on specific parts of the SARS-CoV-2 spike gene. In particular, it was examined how attention spreads across the domains of the spike protein, and it was found that attention is often localized on the site of defining mutations of variants. Therefore, the developed architecture allows gaining insights into the distinctive characteristics of SARS-CoV-2 genetic sequences and into the behaviour of BERT neural network.
+Transformer neural networks, particularly Bidirectional Encoder Representations from Transformers (BERT), have shown remarkable performance across various tasks such as classification, text summarization, and question answering. However, their internal mechanisms remain mathematically obscure, highlighting the need for greater explainability and interpretability. In this direction, this paper investigates the internal mechanisms of BERT proposing a novel perspective on the attention mechanism of BERT from a theoretical perspective. The analysis encompasses both local and global network behavior. At the local level, the concept of directionality of subspace selection as well as a comprehensive study of the patterns emerging from the self-attention matrix are presented. Additionally, this work explores the semantic content of the information stream through data distribution analysis and global statistical measures including the novel concept of cone index. A case study on the classification of SARS-CoV-2 variants using RNA which resulted in a very high accuracy has been selected in order to observe these concepts in an application. The insights gained from this analysis contribute to a deeper understanding of BERT's classification process, offering potential avenues for future architectural improvements in Transformer models and further analysis in the training process. 
+
 
 ## Repository Contents
     .
@@ -49,26 +40,17 @@ python src/main/attention_analysis_main.py --datasetsdir [Dataset directory]
 ```
 
 ## Citation
-  
-MS thesis "An interpretable BERT-based architecture for SARS-CoV-2 variant identification":
 
-    @mastersthesis{ghione2022interpretable,
-      title={An interpretable BERT-based architecture for SARS-CoV-2 variant identification},
-      author={Ghione, Giorgia},
-      year={2022},
-      school={Politecnico di Torino}
-    }
+If you reference or use this work, please cite:
 
-Article "The geometry of BERT":
-
-    @article{bonino2025geometry,
-      title={The geometry of BERT}, 
-      author={Matteo Bonino and Giorgia Ghione and Giansalvo Cirrincione},
-      year={2025},
-      eprint={2502.12033},
-      archivePrefix={arXiv},
-      primaryClass={cs.LG},
-      url={https://arxiv.org/abs/2502.12033}, 
+    @misc{bonino2025geometrybert,
+          title={The geometry of BERT}, 
+          author={Matteo Bonino and Giorgia Ghione and Giansalvo Cirrincione},
+          year={2025},
+          eprint={2502.12033},
+          archivePrefix={arXiv},
+          primaryClass={cs.LG},
+          url={https://arxiv.org/abs/2502.12033}, 
     }
 
 
