@@ -34,6 +34,8 @@ Data preprocessing (requires BWA installed in `/root/miniconda3/bin/bwa`, see `s
 python src/main/preprocess_main.py --datasetsdir [Dataset directory] --bwadir [BWA directory]
 ```
 
+The fine-tuned model can be downloaded here: [Link to the model](https://drive.google.com/file/d/1E69Jp-7TPuw1S7EWcOu6pw0NApLsFz9M/view?usp=sharing)
+
 Inference and analyses (modify `TASK_TYPE` in `general_config.yaml` to select different analysis types):
 ```bash
 python src/main/test_main.py --datasetsdir [Dataset directory] 
