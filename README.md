@@ -10,6 +10,8 @@ Supervisors: Santa Di Cataldo, Marta Lovino, Giansalvo Cirrincione, Elisa Ficarr
 
 The full thesis is publicly available at: https://webthesis.biblio.polito.it/23527/
 
+This work was further developed and led to the publication of the article **"The geometry of BERT"** by Matteo Bonino, Giorgia Ghione, and Giansalvo Cirrincione. The article is available online at: https://arxiv.org/abs/2502.12033
+
 
 ## Abstract
 
@@ -48,11 +50,25 @@ python src/main/attention_analysis_main.py --datasetsdir [Dataset directory]
 
 ## Citation
   
+MS thesis "An interpretable BERT-based architecture for SARS-CoV-2 variant identification":
+
     @mastersthesis{ghione2022interpretable,
       title={An interpretable BERT-based architecture for SARS-CoV-2 variant identification},
       author={Ghione, Giorgia},
       year={2022},
       school={Politecnico di Torino}
+    }
+
+Article "The geometry of BERT":
+
+    @article{bonino2025geometry,
+      title={The geometry of BERT}, 
+      author={Matteo Bonino and Giorgia Ghione and Giansalvo Cirrincione},
+      year={2025},
+      eprint={2502.12033},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/2502.12033}, 
     }
 
 
