@@ -29,9 +29,18 @@ The Covid-19 pandemic has posed many challenges in the medical diagnostics field
 
 ## Usage
 
+Data preprocessing (requires BWA installed in `/root/miniconda3/bin/bwa`, see `src/utils/bwa.sh` script):
 ```bash
 python src/main/preprocess_main.py --datasetsdir [Dataset directory] --bwadir [BWA directory]
+```
+
+Inference and analyses (modify `TASK_TYPE` in `general_config.yaml` to select different analysis types):
+```bash
 python src/main/test_main.py --datasetsdir [Dataset directory] 
+```
+
+Analysis of attention patterns:
+```bash
 python src/main/attention_analysis_main.py --datasetsdir [Dataset directory] 
 ```
 
